@@ -11,6 +11,9 @@ const int VM_MEMORY = 1048576;
 // 32 registers, 32 bits each
 const int REG_MEM_SIZE = 32 * 4;
 
+// io devices
+const uint32_t UART_OUT_REGISTER = 0x10000000;
+
 const size_t alignment = 64;
 const size_t work_mem_size = VM_MEMORY * 2; // size of memory to allocate
 
@@ -37,90 +40,314 @@ int riscv_vm_run(uint8_t *registers, uint8_t *program, uint32_t program_len) {
 }
 // 0x10_00_00_00
 void print_binary_8(uint8_t value);
-void op_system(uint32_t instruction);
-void op_beq(uint32_t instruction);
-void op_lui(uint32_t instruction);
-void op_auipc(uint32_t instruction);
-void op_addi(uint32_t instruction);
-void op_lx(uint32_t instruction);
-void op_sx(uint32_t instruction);
+void print_binary_32(uint32_t value);
+void op_system(uint8_t *wmem, uint32_t instruction);
+uint8_t op_branch(uint8_t *wmem, uint32_t instruction, uint8_t **pcp);
+void op_jal(uint8_t *wmem, uint32_t instruction, uint8_t **pcp, uint32_t pc);
+void op_lui(uint8_t *wmem, uint32_t instruction);
+void op_auipc(uint8_t *wmem, uint32_t instruction, uint32_t pc);
+void op_int_op(uint8_t *wmem, uint32_t instruction);
+void op_load(uint8_t *wmem, uint32_t instruction);
+void op_store(uint8_t *wmem, uint32_t instruction);
+
+void dbg_dump_registers_short(uint8_t *wmem);
 
 int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
   uint32_t pc = 0;
-  uint32_t *pcp = (uint32_t *)(wmem + REG_MEM_SIZE);
+  volatile uint32_t *pcp = (uint32_t *)(wmem + REG_MEM_SIZE);
   uint32_t *program_end = pcp + program_len;
   uint8_t opcode = 0;
   uint32_t instruction = 0;
   printf("running instructions:\n");
+  uint8_t going = 0;
 
-  for (; pcp < program_end; pcp++, pc += 4) {
+  for (; pcp < program_end;) {
     instruction = *pcp;
+    printf(">>> pcp 0x%X inst %04X pe %X\n", pcp, instruction, program_end);
+    if (instruction == 0) {
+      return 0;
+    }
     opcode = instruction & 0x7F;
+    pc = (uint32_t)((uint8_t *)pcp - (wmem + REG_MEM_SIZE));
     // printf("pc %02X inst %08X opcode %02X (%07b)\n", pc,instruction, opcode,
     // opcode);
-    printf("pc %02X inst %08X opcode %02X (", pc, instruction, opcode);
+    dbg_dump_registers_short(wmem);
+    print_binary_32(instruction);
+    printf("addr %04X pc 0x%02X inst 0x%08X opcode 0x%02X (", pcp, pc,
+           instruction, opcode);
     print_binary_8(opcode);
     printf(") - 8 bit %02X\n", instruction & 0xFF);
     switch (opcode) {
     case 0x73:
-      op_system(instruction);
+      op_system(wmem, instruction);
       break;
     case 0x63:
-      op_beq(instruction);
+      if (op_branch(wmem, instruction, (uint8_t **)&pcp)) {
+        continue;
+      }
       break;
+    case 0x6f:
+      op_jal(wmem, instruction, (uint8_t **)&pcp, pc);
+      continue;
     case 0x37:
-      op_lui(instruction);
+      op_lui(wmem, instruction);
       break;
     case 0x17:
-      op_auipc(instruction);
+      op_auipc(wmem, instruction, pc);
       break;
     case 0x13:
-      op_addi(instruction);
+      op_int_op(wmem, instruction);
       break;
     case 0x03:
-      op_lx(instruction);
+      op_load(wmem, instruction);
       break;
     case 0x23:
-      op_sx(instruction);
+      op_store(wmem, instruction);
       break;
 
     default:
       break;
     }
+    // printf("------------------\n");
+    pcp++;
   }
+  printf("!! loop ENDED\n");
   return 0;
 }
 
-void op_sx(uint32_t instruction) { printf("sx\n"); }
+void op_store(uint8_t *wmem, uint32_t instruction) {
+  uint32_t *reg = (uint32_t *)wmem;
+  const uint8_t funct3 = (instruction >> 12) & 0x7;
+  const uint8_t rs1 = (instruction >> 15) & 0x1F;
+  const uint8_t rs2 = (instruction >> 20) & 0x1F;
+  const uint32_t imm = ((instruction >> 7) & 0x1F) | (instruction & (1 << 31)) |
+                       ((instruction >> 20) & 0x7E0);
 
-void op_lx(uint32_t instruction) { printf("lb\n"); }
+  const int32_t immi = (int32_t)imm;
+  const uint32_t addr = reg[rs1] + immi;
 
-void op_addi(uint32_t instruction) { printf("addi\n"); }
+  printf("store rs1 %d rs2 %d width %d immi %d addr 0x%04X\n", rs1, rs2, funct3,
+         immi, addr);
+  if (addr == UART_OUT_REGISTER) {
+    uint8_t byte;
+    uint16_t half;
+    uint32_t word;
+    switch (funct3) {
+    case 0: // sb
+      byte = (uint8_t)reg[rs2];
+      fprintf(stderr, "UART OUT: %c\n", byte);
+      break;
+    case 1: // sh
+      half = (uint16_t)reg[rs2];
+      fprintf(stderr, "%d", half);
+      break;
+    case 2: // sw
+      word = reg[rs2];
+      fprintf(stderr, "%d", word);
+      break;
+    default:
+      break;
+    }
+    return;
+  }
 
-void op_auipc(uint32_t instruction) { printf("auipc\n"); }
+  switch (funct3) {
+  case 0: // sb
+    wmem[REG_MEM_SIZE + addr] = (uint8_t)reg[rs2];
+    break;
+  case 1: // sh
+    wmem[REG_MEM_SIZE + addr] = (uint16_t)reg[rs2];
+    break;
+  case 2: // sw
+    wmem[REG_MEM_SIZE + addr] = reg[rs2];
+    break;
+  default:
+    break;
+  }
+}
 
-void op_lui(uint32_t instruction) { printf("lui\n"); }
+void op_load(uint8_t *wmem, uint32_t instruction) {
+  uint32_t *reg = (uint32_t *)wmem;
+  const uint8_t funct3 = (instruction >> 12) & 0x7;
+  const uint8_t rs1 = (instruction >> 15) & 0x1F;
+  const uint8_t rd = (instruction >> 7) & 0x1F;
+  //   const uint32_t imm = instruction >> 20;
+  const uint32_t imm =
+      ((instruction >> 20) & 0x7FF) | (instruction & (1 << 31));
+  const int32_t immi = (int32_t)imm;
+  uint32_t addr = reg[rs1] + immi;
+  switch (funct3) {
+  case 0: // lb
+    reg[rd] = (int8_t)wmem[REG_MEM_SIZE + addr];
+    break;
+  case 1: // lh
+    reg[rd] = (int16_t)wmem[REG_MEM_SIZE + addr];
+    break;
+  case 2: // lw
+    reg[rd] = wmem[REG_MEM_SIZE + addr];
+    break;
+  case 4: // lbu
+    reg[rd] = wmem[REG_MEM_SIZE + addr];
+    break;
+  case 5: // lhu
+    reg[rd] = wmem[REG_MEM_SIZE + addr];
+    break;
+  default:
+    break;
+  }
 
-void op_beq(uint32_t instruction) { printf("beq\n"); }
+  printf("load width %d rs1 %d rd %d imm %d addr 0x%02X rd_new_val 0x%04X\n",
+         funct3, rs1, rd, immi, addr, reg[rd]);
+}
+
+void op_int_op(uint8_t *wmem, uint32_t instruction) {
+  uint32_t *reg = (uint32_t *)wmem;
+  const uint8_t funct3 = (instruction >> 12) & 0x7;
+  const uint8_t rs1 = (instruction >> 15) & 0x1F;
+  const uint8_t rd = (instruction >> 7) & 0x1F;
+  const uint32_t imm =
+      ((instruction >> 20) & 0x7FF) | (instruction & (1 << 31));
+  const int32_t immi = (int32_t)imm;
+  switch (funct3) {
+  case 0: // addi
+    reg[rd] = reg[rs1] + immi;
+    break;
+  case 2: // slti
+    reg[rd] = (int32_t)reg[rs1] < immi ? 1 : 0;
+    break;
+  case 3: // sltiu
+    reg[rd] = reg[rs1] < imm ? 1 : 0;
+    break;
+  case 4: // xori
+    reg[rd] = reg[rs1] ^ immi;
+    break;
+  case 6: // ori
+    reg[rd] = reg[rs1] | immi;
+    break;
+  case 7: // andi
+    reg[rd] = reg[rs1] & immi;
+    break;
+  case 1: // slli
+    //   reg[rd] = reg[rs1] << rs2;
+    perror("not implemented");
+    break;
+  case 5: // srli and srai
+    // if ((instruction >> 30) & 1) {
+    //   // srai
+    //   reg[rd] = (int32_t)reg[rs1] >> immi;
+    // } else {
+    //   // srli
+    //   reg[rd] = reg[rs1] >> immi;
+    // }
+    perror("not implemented");
+    break;
+
+  default:
+    break;
+  }
+  printf("int op %d rd %d rs %d imm 0x%02X rd_new_val 0x%04X\n", funct3, rd,
+         rs1, immi, reg[rd]);
+}
+
+void op_auipc(uint8_t *wmem, uint32_t instruction, uint32_t pc) {
+  uint32_t *reg = (uint32_t *)wmem;
+  const uint8_t rd = (instruction >> 7) & 0x1F;
+  const uint32_t imm = instruction & 0xFFFFF000;
+  const uint32_t new_rd_val = pc + imm;
+  printf("auipc rd %02d imm 0x%04X pc 0x%02X new_rd_val 0x%02X\n", rd, imm, pc,
+         new_rd_val);
+  reg[rd] = new_rd_val;
+}
+
+void op_lui(uint8_t *wmem, uint32_t instruction) {
+  uint32_t *reg = (uint32_t *)wmem;
+  const uint8_t rd = (instruction >> 7) & 0x1F;
+  const uint32_t imm = instruction & 0xFFFFF000;
+  printf("lui rd %02d imm 0x%04X\n", rd, imm);
+  reg[rd] = imm;
+}
+
+void op_jal(uint8_t *wmem, uint32_t instruction, uint8_t **pcp, uint32_t pc) {
+  uint32_t *reg = (uint32_t *)wmem;
+  const uint32_t next_pc = pc + 4;
+
+  uint8_t rd = (instruction >> 7) & 0x1F;
+
+  const uint32_t imm =
+      ((instruction << 11) & 0x7F800000) | ((instruction << 2) & (1 << 22)) |
+      ((instruction >> 9) & 0x3FF000) | (instruction & (1 << 31));
+  int32_t immi = ((int32_t)imm) >> 11;
+  if (rd) {
+    reg[rd] = next_pc;
+  }
+  *pcp += immi;
+  printf("jal rd %02d imm 0x%04X (%d) next_pc 0x%02X\n", rd, imm, immi,
+         next_pc);
+}
+
+uint8_t op_branch(uint8_t *wmem, uint32_t instruction, uint8_t **pcp) {
+  print_binary_32(instruction);
+  const uint8_t funct3 = (instruction >> 12) & 0x7;
+  const uint8_t rs1 = (instruction >> 15) & 0x1F;
+  const uint8_t rs2 = (instruction >> 20) & 0x1F;
+  const uint32_t imm =
+      ((instruction >> 7) & 0xF) | ((instruction >> 20) & 0x7E0) |
+      ((instruction << 4) & 0x800) | (instruction & 0x80000000);
+  const int32_t imms = (int32_t)imm;
+  const uint32_t *reg = (uint32_t *)wmem;
+  uint8_t is_taken = 0;
+  switch (funct3) {
+  case 0: // beq
+    is_taken = reg[rs1] == reg[rs2];
+    break;
+  case 1: // bne
+    is_taken = reg[rs1] != reg[rs2];
+    break;
+  case 4: // blt
+    is_taken = (int32_t)reg[rs1] < (int32_t)reg[rs2];
+    is_taken = reg[rs1] >= reg[rs2];
+    break;
+  case 5: // bge
+    is_taken = (int32_t)reg[rs1] >= (int32_t)reg[rs2];
+    is_taken = reg[rs1] >= reg[rs2];
+    break;
+  case 6: // bltu
+    is_taken = reg[rs1] < reg[rs2];
+    is_taken = reg[rs1] >= reg[rs2];
+    break;
+  case 7: // bgeu
+    is_taken = reg[rs1] >= reg[rs2];
+    break;
+  }
+  printf("branch funct3 %01X rs1 %d rs2 %d imms %d is_taken %d\n", funct3, rs1,
+         rs2, imms, is_taken);
+  *pcp += is_taken ? imms : 0;
+  return is_taken;
+}
 
 void op_ecall(uint32_t instruction) { printf("ecall\n"); }
 
 void op_ebreak(uint32_t instruction) { printf("ebreak\n"); }
 
-void op_system(uint32_t instruction) {
+void op_system(uint8_t *wmem, uint32_t instruction) {
   const uint8_t funct3 = (instruction >> 12) & 0x7;
-  printf("ecall funct3 %02X\n", funct3);
+  const uint8_t funct7 = (instruction >> 25);
+  printf("system funct3 %02X funct7 %02X\n", funct3, funct7);
   if (funct3 == 0x0) {
-    const uint8_t funct7 = (instruction >> 20);
     // printf("ecall funct7 %02X\n", funct7);
     switch (funct7) {
     case 0x0:
       // ecall
       op_ecall(instruction);
       break;
-    case 0x18:
+    case 0x1:
       // ebreak
       op_ebreak(instruction);
+      break;
+    case 0x8:
+      // wfi
+      printf("wfi\n");
+      exit(0);
       break;
     default:
       break;
@@ -140,6 +367,15 @@ void op_system(uint32_t instruction) {
     break;
   case 0x2:
     // csrrs
+    switch (csr) {
+    case 0xF14: // mhartid (Hardware thread ID.)
+    {
+      //   uint32_t *reg = (uint32_t *)(wmem + REG_MEM_SIZE);
+      ((uint32_t *)wmem)[rd] = 0;
+    } break;
+    default:
+      break;
+    }
     break;
   case 0x3:
     // csrrc
@@ -175,6 +411,18 @@ void print_binary_32(uint32_t value) {
     printf("%c", (value & (1 << i)) ? '1' : '0');
     if (i % 4 == 0) { // Add a space every 4 bits for readability
       printf(" ");
+    }
+  }
+  printf("\n");
+}
+
+void dbg_dump_registers_short(uint8_t *wmem) {
+  uint32_t *reg = (uint32_t *)wmem;
+  printf("registers: ");
+  for (int i = 0; i < 32; i++) {
+    uint32_t val = reg[i];
+    if (val) {
+      printf("reg %02d 0x%04X ", i, val);
     }
   }
   printf("\n");
