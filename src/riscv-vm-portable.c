@@ -200,9 +200,6 @@ void op_load(uint8_t *wmem, uint32_t instruction) {
   if (rd == 0) {
     return;
   }
-  //   const uint32_t imm = instruction >> 20;
-  // const uint32_t imm = ((instruction >> 20) & 0x7FF) | (instruction & (1 <<
-  // 31)); const int32_t immi = (int32_t)imm;
 
   const uint32_t imm = (instruction & 0xFFF00000);
   const int32_t immi = ((int32_t)imm) >> 20;
@@ -212,22 +209,16 @@ void op_load(uint8_t *wmem, uint32_t instruction) {
     reg[rd] = (int8_t)wmem[REG_MEM_SIZE + addr];
     break;
   case 1: // lh
-  {
-    int16_t mh = ((int16_t *)wmem)[((REG_MEM_SIZE + addr) >> 1)];
-    reg[rd] = mh;
-    // printf("==== mem at 0x%X is %02X%02X, mh is 0x%04X\n", addr,
-    // wmem[REG_MEM_SIZE + addr], wmem[REG_MEM_SIZE + addr + 1], mh); reg[rd] =
-    // ((int16_t*)wmem)[REG_MEM_SIZE + addr]; reg[rd] =
-    // (int16_t)wmem[REG_MEM_SIZE + addr];
-  } break;
+    reg[rd] = *(int16_t *)(wmem + REG_MEM_SIZE + addr);
+    break;
   case 2: // lw
-    reg[rd] = wmem[REG_MEM_SIZE + addr];
+    reg[rd] = *(uint32_t *)(wmem + REG_MEM_SIZE + addr);
     break;
   case 4: // lbu
     reg[rd] = wmem[REG_MEM_SIZE + addr];
     break;
   case 5: // lhu
-    reg[rd] = wmem[REG_MEM_SIZE + addr];
+    reg[rd] = *(uint16_t *)(wmem + REG_MEM_SIZE + addr);
     break;
   default:
     break;
