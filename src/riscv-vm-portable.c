@@ -212,8 +212,14 @@ void op_load(uint8_t *wmem, uint32_t instruction) {
     reg[rd] = (int8_t)wmem[REG_MEM_SIZE + addr];
     break;
   case 1: // lh
-    reg[rd] = (int16_t)wmem[REG_MEM_SIZE + addr];
-    break;
+  {
+    int16_t mh = ((int16_t *)wmem)[((REG_MEM_SIZE + addr) >> 1)];
+    reg[rd] = mh;
+    // printf("==== mem at 0x%X is %02X%02X, mh is 0x%04X\n", addr,
+    // wmem[REG_MEM_SIZE + addr], wmem[REG_MEM_SIZE + addr + 1], mh); reg[rd] =
+    // ((int16_t*)wmem)[REG_MEM_SIZE + addr]; reg[rd] =
+    // (int16_t)wmem[REG_MEM_SIZE + addr];
+  } break;
   case 2: // lw
     reg[rd] = wmem[REG_MEM_SIZE + addr];
     break;

@@ -44,6 +44,6 @@ int main() {
     // Close the file
     fclose(file);
 
-    return riscv_vm_run(NULL, buffer, file_size);
+    return riscv_vm_run(NULL, buffer, file_size, NULL, 0, 0);
 }
 
