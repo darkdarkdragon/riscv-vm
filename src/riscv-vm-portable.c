@@ -71,8 +71,9 @@ int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
     }
     opcode = instruction & 0x7F;
     pc = (uint32_t)((uint8_t *)pcp - (wmem + REG_MEM_SIZE));
-    // printf("pc %02X inst %08X opcode %02X (%07b)\n", pc,instruction, opcode, opcode);
-    printf("---> pc 0x%02X inst %08X opcode 0x%02X\n", pc,instruction, opcode);
+    // printf("pc %02X inst %08X opcode %02X (%07b)\n", pc,instruction, opcode,
+    // opcode);
+    printf("---> pc 0x%02X inst %08X opcode 0x%02X\n", pc, instruction, opcode);
     dbg_dump_registers_short(wmem);
     print_binary_32(instruction);
     printf("addr %04X pc 0x%02X inst 0x%08X opcode 0x%02X (", pcp, pc,
@@ -176,7 +177,7 @@ void op_load(uint8_t *wmem, uint32_t instruction) {
   const uint8_t funct3 = (instruction >> 12) & 0x7;
   const uint8_t rs1 = (instruction >> 15) & 0x1F;
   const uint8_t rd = (instruction >> 7) & 0x1F;
-  if (rd ==0) {
+  if (rd == 0) {
     return;
   }
   //   const uint32_t imm = instruction >> 20;
@@ -219,43 +220,44 @@ void op_int_op(uint8_t *wmem, uint32_t instruction) {
   const uint8_t rs1 = (instruction >> 15) & 0x1F;
   const uint8_t rs2 = (instruction >> 20) & 0x1F;
   switch (funct3) {
-    case 0: // add/sub
-      if (funct7 == 0) {
-        reg[rd] = reg[rs1] + reg[rs2];
-      } else {
-        reg[rd] = reg[rs1] - reg[rs2];
-      }
-      break;
-    case 1: // sll
-      reg[rd] = reg[rs1] << (reg[rs2] & 0x1F);
-      break;
-    case 2: // slt
-      reg[rd] = (int32_t)reg[rs1] < (int32_t)reg[rs2] ? 1 : 0;
-      break;
-    case 3: // sltu
-      reg[rd] = reg[rs1] < reg[rs2] ? 1 : 0;
-      break;
-    case 4: // xor
-      reg[rd] = reg[rs1] ^ reg[rs2];
-      break;
-    case 5: // srl and sra
-      if (funct7 == 0) {
-        // srl
-        reg[rd] = reg[rs1] >> (reg[rs2] & 0x1F);
-      } else {
-        // sra
-        reg[rd] = (int32_t)reg[rs1] >> (reg[rs2] & 0x1F);
-      }
-    case 6: // or
-      reg[rd] = reg[rs1] | reg[rs2];
-      break;
-    case 7: // and
-      reg[rd] = reg[rs1] & reg[rs2];
-      break;
-    default:
+  case 0: // add/sub
+    if (funct7 == 0) {
+      reg[rd] = reg[rs1] + reg[rs2];
+    } else {
+      reg[rd] = reg[rs1] - reg[rs2];
+    }
+    break;
+  case 1: // sll
+    reg[rd] = reg[rs1] << (reg[rs2] & 0x1F);
+    break;
+  case 2: // slt
+    reg[rd] = (int32_t)reg[rs1] < (int32_t)reg[rs2] ? 1 : 0;
+    break;
+  case 3: // sltu
+    reg[rd] = reg[rs1] < reg[rs2] ? 1 : 0;
+    break;
+  case 4: // xor
+    reg[rd] = reg[rs1] ^ reg[rs2];
+    break;
+  case 5: // srl and sra
+    if (funct7 == 0) {
+      // srl
+      reg[rd] = reg[rs1] >> (reg[rs2] & 0x1F);
+    } else {
+      // sra
+      reg[rd] = (int32_t)reg[rs1] >> (reg[rs2] & 0x1F);
+    }
+  case 6: // or
+    reg[rd] = reg[rs1] | reg[rs2];
+    break;
+  case 7: // and
+    reg[rd] = reg[rs1] & reg[rs2];
+    break;
+  default:
     break;
   }
-  printf("int reg-reg op %d rd %d rs1 %d rs2 %d rd_new_val 0x%04X\n", funct3, rd, rs1, rs2, reg[rd]);
+  printf("int reg-reg op %d rd %d rs1 %d rs2 %d rd_new_val 0x%04X\n", funct3,
+         rd, rs1, rs2, reg[rd]);
 }
 
 void op_int_imm_op(uint8_t *wmem, uint32_t instruction) {
@@ -308,7 +310,7 @@ void op_int_imm_op(uint8_t *wmem, uint32_t instruction) {
       break;
     }
     printf("int op %d rd %d rs %d imm 0x%02X rd_new_val 0x%04X\n", funct3, rd,
-          rs1, immi, reg[rd]);
+           rs1, immi, reg[rd]);
   }
 }
 
@@ -361,7 +363,9 @@ uint8_t op_branch(uint8_t *wmem, uint32_t instruction, uint8_t **pcp) {
   //     ((instruction >> 7) & 0x1E) | ((instruction >> 20) & 0x7E0) |
   //     ((instruction << 4) & 0x800) | (instruction & 0x80000000);
   // const int32_t imms = (int32_t)imm;
-  const uint32_t imm = (instruction & 0x80000000) | ((instruction & (1<<7)) << 23) | ((instruction & 0x7E000000) >> 1) | ((instruction & 0xF00) << 12);
+  const uint32_t imm =
+      (instruction & 0x80000000) | ((instruction & (1 << 7)) << 23) |
+      ((instruction & 0x7E000000) >> 1) | ((instruction & 0xF00) << 12);
 
   const int32_t imms = ((int32_t)imm) >> 19;
   const uint32_t *reg = (uint32_t *)wmem;
@@ -392,7 +396,7 @@ uint8_t op_branch(uint8_t *wmem, uint32_t instruction, uint8_t **pcp) {
   return is_taken;
 }
 
-void op_ecall(uint8_t *wmem, uint32_t instruction) { 
+void op_ecall(uint8_t *wmem, uint32_t instruction) {
   uint32_t *reg = (uint32_t *)wmem;
   uint32_t gp = reg[3];
   uint32_t a0 = reg[10]; // argument
@@ -405,7 +409,7 @@ void op_ecall(uint8_t *wmem, uint32_t instruction) {
     is_test = a0 & 1;
     exit_code = a0 >> 1;
     if (is_test && a0) {
-        fprintf(stderr, "*** FAILED *** (tohost = %d)\n", exit_code);
+      fprintf(stderr, "*** FAILED *** (tohost = %d)\n", exit_code);
     }
     printf("exit code %d\n", exit_code);
     exit(a0);
