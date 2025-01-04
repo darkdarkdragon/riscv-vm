@@ -21,7 +21,8 @@ const int ERR_OUT_OF_MEM = 124;
 
 int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len);
 
-int riscv_vm_run(uint8_t *registers, uint8_t *program, uint32_t program_len) {
+int riscv_vm_run(uint8_t *registers, uint8_t *program, uint32_t program_len,
+                 uint8_t *data, uint32_t data_len, uint32_t data_offset) {
   uint8_t *wmem = aligned_alloc(alignment, work_mem_size);
   if (wmem == NULL) {
     // Handle allocation failure
@@ -34,6 +35,17 @@ int riscv_vm_run(uint8_t *registers, uint8_t *program, uint32_t program_len) {
   }
   uint8_t *prog_start = wmem + REG_MEM_SIZE;
   memcpy(prog_start, program, program_len);
+  if (data) {
+    if (data_offset + data_len > work_mem_size) {
+      fprintf(stderr,
+              "data placed outside of available memory (data start 0x%X end "
+              "0x%X data len %d)\n",
+              data_offset, data_offset + data_len, data_len);
+      exit(11);
+    }
+    memcpy(prog_start + data_offset, data, data_len);
+  }
+
   int res = riscv_vm_main_loop(wmem, program_len);
   free(wmem);
   return res;
@@ -44,6 +56,7 @@ void print_binary_32(uint32_t value);
 void op_system(uint8_t *wmem, uint32_t instruction);
 uint8_t op_branch(uint8_t *wmem, uint32_t instruction, uint8_t **pcp);
 void op_jal(uint8_t *wmem, uint32_t instruction, uint8_t **pcp, uint32_t pc);
+void op_jalr(uint8_t *wmem, uint32_t instruction, uint8_t **pcp, uint32_t pc);
 void op_lui(uint8_t *wmem, uint32_t instruction);
 void op_auipc(uint8_t *wmem, uint32_t instruction, uint32_t pc);
 void op_int_imm_op(uint8_t *wmem, uint32_t instruction);
@@ -92,6 +105,9 @@ int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
     case 0x6f:
       op_jal(wmem, instruction, (uint8_t **)&pcp, pc);
       continue;
+    case 0x67:
+      op_jalr(wmem, instruction, (uint8_t **)&pcp, pc);
+      continue;
     case 0x37:
       op_lui(wmem, instruction);
       break;
@@ -126,10 +142,14 @@ void op_store(uint8_t *wmem, uint32_t instruction) {
   const uint8_t funct3 = (instruction >> 12) & 0x7;
   const uint8_t rs1 = (instruction >> 15) & 0x1F;
   const uint8_t rs2 = (instruction >> 20) & 0x1F;
-  const uint32_t imm = ((instruction >> 7) & 0x1F) | (instruction & (1 << 31)) |
-                       ((instruction >> 20) & 0x7E0);
+  // const uint32_t imm = ((instruction >> 7) & 0x1F) | (instruction & (1 <<
+  // 31)) |
+  //                      ((instruction >> 20) & 0x7E0);
+  // const int32_t immi = (int32_t)imm;
+  const uint32_t imm =
+      (instruction & 0xFE000000) | ((instruction & 0xF80) << 13);
+  const int32_t immi = ((int32_t)imm) >> 19;
 
-  const int32_t immi = (int32_t)imm;
   const uint32_t addr = reg[rs1] + immi;
 
   printf("store rs1 %d rs2 %d width %d immi %d addr 0x%04X\n", rs1, rs2, funct3,
@@ -181,9 +201,11 @@ void op_load(uint8_t *wmem, uint32_t instruction) {
     return;
   }
   //   const uint32_t imm = instruction >> 20;
-  const uint32_t imm =
-      ((instruction >> 20) & 0x7FF) | (instruction & (1 << 31));
-  const int32_t immi = (int32_t)imm;
+  // const uint32_t imm = ((instruction >> 20) & 0x7FF) | (instruction & (1 <<
+  // 31)); const int32_t immi = (int32_t)imm;
+
+  const uint32_t imm = (instruction & 0xFFF00000);
+  const int32_t immi = ((int32_t)imm) >> 20;
   uint32_t addr = reg[rs1] + immi;
   switch (funct3) {
   case 0: // lb
@@ -309,8 +331,8 @@ void op_int_imm_op(uint8_t *wmem, uint32_t instruction) {
     default:
       break;
     }
-    printf("int op %d rd %d rs %d imm 0x%02X rd_new_val 0x%04X\n", funct3, rd,
-           rs1, immi, reg[rd]);
+    printf("int op %d rd %d rs %d imm 0x%02X (%d) rd_new_val 0x%04X\n", funct3,
+           rd, rs1, immi, immi, reg[rd]);
   }
 }
 
@@ -352,6 +374,29 @@ void op_jal(uint8_t *wmem, uint32_t instruction, uint8_t **pcp, uint32_t pc) {
   *pcp += immi;
   printf("jal rd %02d imm 0x%04X (%d) next_pc 0x%02X\n", rd, imm, immi,
          next_pc);
+}
+
+void op_jalr(uint8_t *wmem, uint32_t instruction, uint8_t **pcp, uint32_t pc) {
+  uint32_t *reg = (uint32_t *)wmem;
+  const uint32_t next_pc = pc + 4;
+
+  const uint8_t funct3 = (instruction >> 12) & 0x7;
+  const uint8_t rs1 = (instruction >> 15) & 0x1F;
+  const uint8_t rd = (instruction >> 7) & 0x1F;
+  const uint32_t imm = (instruction & 0xFFF00000);
+  const int32_t immi = ((int32_t)imm) >> 20;
+  const uint32_t addr = (reg[rs1] + immi) & 0xFFFFFFFE;
+
+  if (rd) {
+    reg[rd] = next_pc;
+  }
+  *pcp = wmem + REG_MEM_SIZE + addr;
+  printf("jalr rd %02d rs1 %d addr %02X immi %d next_pc 0x%02X\n", rd, rs1,
+         addr, immi, next_pc);
+  if (addr & 0x3) {
+    fprintf(stderr, "!! addr not aligned %X\n", addr);
+    exit(1);
+  }
 }
 
 uint8_t op_branch(uint8_t *wmem, uint32_t instruction, uint8_t **pcp) {
