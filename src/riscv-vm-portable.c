@@ -234,46 +234,86 @@ void op_int_op(uint8_t *wmem, uint32_t instruction) {
   const uint8_t funct7 = (instruction >> 25);
   const uint8_t rs1 = (instruction >> 15) & 0x1F;
   const uint8_t rs2 = (instruction >> 20) & 0x1F;
-  switch (funct3) {
-  case 0: // add/sub
-    if (funct7 == 0) {
-      reg[rd] = reg[rs1] + reg[rs2];
-    } else {
-      reg[rd] = reg[rs1] - reg[rs2];
+  if (funct7 == 1) { // M extension
+    switch (funct3) {
+    case 0: // mul
+      reg[rd] = reg[rs1] * reg[rs2];
+      break;
+    case 1: // mulh
+      reg[rd] = ((int64_t)(int32_t)reg[rs1] * (int64_t)(int32_t)reg[rs2]) >> 32;
+      break;
+    case 2: // mulhsu
+      reg[rd] =
+          ((uint64_t)((int64_t)(int32_t)reg[rs1] * (uint64_t)reg[rs2])) >> 32;
+      break;
+    case 3: // mulhu
+      reg[rd] = ((uint64_t)reg[rs1] * (uint64_t)reg[rs2]) >> 32;
+      break;
+    case 4: // div
+      if (reg[rs2] == 0) {
+        reg[rd] = 0xFFFFFFFF;
+      } else {
+        reg[rd] = (int32_t)reg[rs1] / (int32_t)reg[rs2];
+      }
+      break;
+    case 5: // divu
+      if (reg[rs2] == 0) {
+        reg[rd] = 0xFFFFFFFF;
+      } else {
+        reg[rd] = reg[rs1] / reg[rs2];
+      }
+      break;
+    case 6: // rem
+      reg[rd] = (int32_t)reg[rs1] % (int32_t)reg[rs2];
+      break;
+    case 7: // remu
+      reg[rd] = reg[rs1] % reg[rs2];
+      break;
+    default:
+      break;
     }
-    break;
-  case 1: // sll
-    reg[rd] = reg[rs1] << (reg[rs2] & 0x1F);
-    break;
-  case 2: // slt
-    reg[rd] = (int32_t)reg[rs1] < (int32_t)reg[rs2] ? 1 : 0;
-    break;
-  case 3: // sltu
-    reg[rd] = reg[rs1] < reg[rs2] ? 1 : 0;
-    break;
-  case 4: // xor
-    reg[rd] = reg[rs1] ^ reg[rs2];
-    break;
-  case 5: // srl and sra
-    if (funct7 == 0) {
-      // srl
-      reg[rd] = reg[rs1] >> (reg[rs2] & 0x1F);
-    } else {
-      // sra
-      reg[rd] = ((int32_t)reg[rs1]) >> (reg[rs2] & 0x1F);
+  } else {
+    switch (funct3) {
+    case 0: // add/sub
+      if (funct7 == 0) {
+        reg[rd] = reg[rs1] + reg[rs2];
+      } else {
+        reg[rd] = reg[rs1] - reg[rs2];
+      }
+      break;
+    case 1: // sll
+      reg[rd] = reg[rs1] << (reg[rs2] & 0x1F);
+      break;
+    case 2: // slt
+      reg[rd] = (int32_t)reg[rs1] < (int32_t)reg[rs2] ? 1 : 0;
+      break;
+    case 3: // sltu
+      reg[rd] = reg[rs1] < reg[rs2] ? 1 : 0;
+      break;
+    case 4: // xor
+      reg[rd] = reg[rs1] ^ reg[rs2];
+      break;
+    case 5: // srl and sra
+      if (funct7 == 0) {
+        // srl
+        reg[rd] = reg[rs1] >> (reg[rs2] & 0x1F);
+      } else if (funct7 == 32) {
+        // sra
+        reg[rd] = ((int32_t)reg[rs1]) >> (reg[rs2] & 0x1F);
+      }
+      break;
+    case 6: // or
+      reg[rd] = reg[rs1] | reg[rs2];
+      break;
+    case 7: // and
+      reg[rd] = reg[rs1] & reg[rs2];
+      break;
+    default:
+      break;
     }
-    break;
-  case 6: // or
-    reg[rd] = reg[rs1] | reg[rs2];
-    break;
-  case 7: // and
-    reg[rd] = reg[rs1] & reg[rs2];
-    break;
-  default:
-    break;
   }
-  printf("int reg-reg op %d rd %d rs1 %d rs2 %d rd_new_val 0x%04X\n", funct3,
-         rd, rs1, rs2, reg[rd]);
+  printf("int reg-reg op %d rd %d rs1 %d rs2 %d rd_new_val 0x%04X funct7 %d\n",
+         funct3, rd, rs1, rs2, reg[rd], funct7);
 }
 
 void op_int_imm_op(uint8_t *wmem, uint32_t instruction) {
