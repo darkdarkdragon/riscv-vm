@@ -46,6 +46,7 @@ uint8_t op_branch(uint8_t *wmem, uint32_t instruction, uint8_t **pcp);
 void op_jal(uint8_t *wmem, uint32_t instruction, uint8_t **pcp, uint32_t pc);
 void op_lui(uint8_t *wmem, uint32_t instruction);
 void op_auipc(uint8_t *wmem, uint32_t instruction, uint32_t pc);
+void op_int_imm_op(uint8_t *wmem, uint32_t instruction);
 void op_int_op(uint8_t *wmem, uint32_t instruction);
 void op_load(uint8_t *wmem, uint32_t instruction);
 void op_store(uint8_t *wmem, uint32_t instruction);
@@ -97,6 +98,9 @@ int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
       op_auipc(wmem, instruction, pc);
       break;
     case 0x13:
+      op_int_imm_op(wmem, instruction);
+      break;
+    case 0x33:
       op_int_op(wmem, instruction);
       break;
     case 0x03:
@@ -205,6 +209,56 @@ void op_load(uint8_t *wmem, uint32_t instruction) {
 }
 
 void op_int_op(uint8_t *wmem, uint32_t instruction) {
+  uint32_t *reg = (uint32_t *)wmem;
+  const uint8_t rd = (instruction >> 7) & 0x1F;
+  if (rd == 0) {
+    return;
+  }
+  const uint8_t funct3 = (instruction >> 12) & 0x7;
+  const uint8_t funct7 = (instruction >> 25);
+  const uint8_t rs1 = (instruction >> 15) & 0x1F;
+  const uint8_t rs2 = (instruction >> 20) & 0x1F;
+  switch (funct3) {
+    case 0: // add/sub
+      if (funct7 == 0) {
+        reg[rd] = reg[rs1] + reg[rs2];
+      } else {
+        reg[rd] = reg[rs1] - reg[rs2];
+      }
+      break;
+    case 1: // sll
+      reg[rd] = reg[rs1] << (reg[rs2] & 0x1F);
+      break;
+    case 2: // slt
+      reg[rd] = (int32_t)reg[rs1] < (int32_t)reg[rs2] ? 1 : 0;
+      break;
+    case 3: // sltu
+      reg[rd] = reg[rs1] < reg[rs2] ? 1 : 0;
+      break;
+    case 4: // xor
+      reg[rd] = reg[rs1] ^ reg[rs2];
+      break;
+    case 5: // srl and sra
+      if (funct7 == 0) {
+        // srl
+        reg[rd] = reg[rs1] >> (reg[rs2] & 0x1F);
+      } else {
+        // sra
+        reg[rd] = (int32_t)reg[rs1] >> (reg[rs2] & 0x1F);
+      }
+    case 6: // or
+      reg[rd] = reg[rs1] | reg[rs2];
+      break;
+    case 7: // and
+      reg[rd] = reg[rs1] & reg[rs2];
+      break;
+    default:
+    break;
+  }
+  printf("int reg-reg op %d rd %d rs1 %d rs2 %d rd_new_val 0x%04X\n", funct3, rd, rs1, rs2, reg[rd]);
+}
+
+void op_int_imm_op(uint8_t *wmem, uint32_t instruction) {
   uint32_t *reg = (uint32_t *)wmem;
   uint8_t shift;
   const uint8_t funct3 = (instruction >> 12) & 0x7;

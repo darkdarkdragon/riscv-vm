@@ -67,7 +67,7 @@ run-simple: $(OUT_SIMPLE)
 	./$(OUT_SIMPLE)
 
 run-runelf: $(OUT_RUNELF)
-	./$(OUT_RUNELF) rv32ui-p-add
+	./$(OUT_RUNELF) rv32ui-p-addi
 
 # Clean target
 clean:
