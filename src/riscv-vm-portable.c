@@ -142,13 +142,9 @@ void op_store(uint8_t *wmem, uint32_t instruction) {
   const uint8_t funct3 = (instruction >> 12) & 0x7;
   const uint8_t rs1 = (instruction >> 15) & 0x1F;
   const uint8_t rs2 = (instruction >> 20) & 0x1F;
-  // const uint32_t imm = ((instruction >> 7) & 0x1F) | (instruction & (1 <<
-  // 31)) |
-  //                      ((instruction >> 20) & 0x7E0);
-  // const int32_t immi = (int32_t)imm;
   const uint32_t imm =
       (instruction & 0xFE000000) | ((instruction & 0xF80) << 13);
-  const int32_t immi = ((int32_t)imm) >> 19;
+  const int32_t immi = ((int32_t)imm) >> 20;
 
   const uint32_t addr = reg[rs1] + immi;
 
@@ -182,10 +178,10 @@ void op_store(uint8_t *wmem, uint32_t instruction) {
     wmem[REG_MEM_SIZE + addr] = (uint8_t)reg[rs2];
     break;
   case 1: // sh
-    wmem[REG_MEM_SIZE + addr] = (uint16_t)reg[rs2];
+    *(uint16_t *)(wmem + REG_MEM_SIZE + addr) = (uint16_t)reg[rs2];
     break;
   case 2: // sw
-    wmem[REG_MEM_SIZE + addr] = reg[rs2];
+    *(uint32_t *)(wmem + REG_MEM_SIZE + addr) = reg[rs2];
     break;
   default:
     break;
@@ -264,8 +260,9 @@ void op_int_op(uint8_t *wmem, uint32_t instruction) {
       reg[rd] = reg[rs1] >> (reg[rs2] & 0x1F);
     } else {
       // sra
-      reg[rd] = (int32_t)reg[rs1] >> (reg[rs2] & 0x1F);
+      reg[rd] = ((int32_t)reg[rs1]) >> (reg[rs2] & 0x1F);
     }
+    break;
   case 6: // or
     reg[rd] = reg[rs1] | reg[rs2];
     break;
@@ -300,7 +297,7 @@ void op_int_imm_op(uint8_t *wmem, uint32_t instruction) {
       reg[rd] = (int32_t)reg[rs1] < immi ? 1 : 0;
       break;
     case 3: // sltiu
-      reg[rd] = reg[rs1] < imm ? 1 : 0;
+      reg[rd] = reg[rs1] < ((uint32_t)immi) ? 1 : 0;
       break;
     case 4: // xori
       reg[rd] = reg[rs1] ^ immi;
