@@ -1,6 +1,3 @@
-#!env bash
-
-
 #!/bin/bash
 make runelf
 
