@@ -1,6 +1,10 @@
 
 #include <stdint.h>
 
+#define LOG_TRACE 0
+#define LOG_DEBUG 0
+
+
 /**
   Implements RV32IM virtual machine
 

@@ -60,6 +60,21 @@
 #define SHF_STRINGS 0x20
 #define SHF_INFO_LINK 0x40
 
+/* Program header types */
+#define PT_NULL 0
+#define PT_LOAD 1
+#define PT_DYNAMIC 2
+#define PT_INTERP 3
+#define PT_NOTE 4
+#define PT_SHLIB 5
+#define PT_PHDR 6
+#define PT_TLS 7
+
+/* Program header flags */
+#define PF_X 0x1
+#define PF_W 0x2
+#define PF_R 0x4
+
 /* ELF Header */
 typedef struct {
   unsigned char e_ident[EI_NIDENT];
@@ -77,6 +92,18 @@ typedef struct {
   uint16_t e_shnum;
   uint16_t e_shstrndx;
 } Elf32_Ehdr;
+
+/* Program header */
+typedef struct {
+  uint32_t p_type;
+  uint32_t p_offset;
+  uint32_t p_vaddr;
+  uint32_t p_paddr;
+  uint32_t p_filesz;
+  uint32_t p_memsz;
+  uint32_t p_flags;
+  uint32_t p_align;
+} Elf32_Phdr;
 
 typedef struct {
   unsigned char e_ident[EI_NIDENT];
@@ -194,15 +221,67 @@ void print_elf_header_info(unsigned char *e_ident) {
   printf("\n");
 }
 
+char *get_segment_type(uint32_t p_type) {
+  switch (p_type) {
+  case PT_NULL:
+    return "NULL";
+  case PT_LOAD:
+    return "LOAD";
+  case PT_DYNAMIC:
+    return "DYNAMIC";
+  case PT_INTERP:
+    return "INTERP";
+  case PT_NOTE:
+    return "NOTE";
+  case PT_SHLIB:
+    return "SHLIB";
+  case PT_PHDR:
+    return "PHDR";
+  case PT_TLS:
+    return "TLS";
+  default:
+    return "UNKNOWN";
+  }
+}
+
+void print_segment_flags(uint32_t flags) {
+  printf("Flags: ");
+  if (flags & PF_R)
+    printf("R");
+  if (flags & PF_W)
+    printf("W");
+  if (flags & PF_X)
+    printf("X");
+  printf("\n");
+}
+
 /* Rest of the code remains the same as in previous version */
 void process_elf32(void *file_data) {
   Elf32_Ehdr *ehdr = (Elf32_Ehdr *)file_data;
+  Elf32_Phdr *phdr = (Elf32_Phdr *)((char *)file_data + ehdr->e_phoff);
   Elf32_Shdr *shdr = (Elf32_Shdr *)((char *)file_data + ehdr->e_shoff);
   char *strtab = (char *)file_data + shdr[ehdr->e_shstrndx].sh_offset;
 
   printf("Architecture: %s\n", get_machine_name(ehdr->e_machine));
   printf("Number of sections: %d\n", ehdr->e_shnum);
   printf("Entry: 0x%x\n\n", ehdr->e_entry);
+
+  // Print Program Headers
+  printf("\nProgram Headers (%d):\n", ehdr->e_phnum);
+  for (int i = 0; i < ehdr->e_phnum; i++) {
+    printf("\nProgram Header %d:\n", i);
+    printf("Type: %s\n", get_segment_type(phdr[i].p_type));
+    printf("Offset: 0x%x\n", phdr[i].p_offset);
+    printf("VirtAddr: 0x%x\n", phdr[i].p_vaddr);
+    printf("PhysAddr: 0x%x\n", phdr[i].p_paddr);
+    printf("FileSize: 0x%x\n", phdr[i].p_filesz);
+    printf("MemSize: 0x%x\n", phdr[i].p_memsz);
+    print_segment_flags(phdr[i].p_flags);
+    printf("Align: 0x%x\n", phdr[i].p_align);
+  }
+
+  // Print Section Headers
+  printf("\nSection Headers (%d):\n", ehdr->e_shnum);
 
   for (int i = 0; i < ehdr->e_shnum; i++) {
     printf("Section %2d: %s\n", i, &strtab[shdr[i].sh_name]);
@@ -252,6 +331,37 @@ void run_elf32(void *file_data) {
       break;
     }
   }
+}
+
+void run_elf32v2(void *file_data) {
+  Elf32_Ehdr *ehdr = (Elf32_Ehdr *)file_data;
+  Elf32_Phdr *phdr = (Elf32_Phdr *)((char *)file_data + ehdr->e_phoff);
+  Elf32_Shdr *shdr = (Elf32_Shdr *)((char *)file_data + ehdr->e_shoff);
+  char *strtab = (char *)file_data + shdr[ehdr->e_shstrndx].sh_offset;
+  printf("Architecture: %s\n", get_machine_name(ehdr->e_machine));
+  printf("Number of sections: %d\n", ehdr->e_shnum);
+  printf("Entry: 0x%x\n\n", ehdr->e_entry);
+
+  uint8_t *text = 0;
+  uint32_t text_len = 0;
+
+  // Print Program Headers
+  printf("\nProgram Headers (%d):\n", ehdr->e_phnum);
+  for (int i = 0; i < ehdr->e_phnum; i++) {
+    if (phdr[i].p_type == PT_LOAD) {
+      if (text == 0) {
+        text = (uint8_t *)((char *)file_data + phdr[i].p_offset);
+        text_len = phdr[i].p_filesz;
+        // printf("Found .text section\n");
+      } else {
+        uint8_t *sect_text = (uint8_t *)((char *)file_data + phdr[i].p_offset);
+        sect_text += phdr[i].p_filesz;
+        text_len = sect_text - text;
+        // printf("Found .data section\n");
+      }
+    }
+  }
+  riscv_vm_run(NULL, text, text_len, 0, 0, 0);
 }
 
 void process_elf64(void *file_data) {
@@ -311,7 +421,8 @@ int main(int argc, char *argv[]) {
 
   if (e_ident[EI_CLASS] == ELFCLASS32) {
     // process_elf32(file_data);
-    run_elf32(file_data);
+    // run_elf32(file_data);
+    run_elf32v2(file_data);
   } else if (e_ident[EI_CLASS] == ELFCLASS64) {
     // process_elf64(file_data);
     fprintf(stderr, "Can't run 64 bit programs\n");

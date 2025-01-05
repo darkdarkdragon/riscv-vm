@@ -67,7 +67,13 @@ run-simple: $(OUT_SIMPLE)
 	./$(OUT_SIMPLE)
 
 run-runelf: $(OUT_RUNELF)
-	./$(OUT_RUNELF) rv32um-p-mulhu
+	./$(OUT_RUNELF) towers.riscv
+#	./$(OUT_RUNELF) median.riscv
+#	 ./$(OUT_RUNELF) rv32ui-p-lh
+#	 ./$(OUT_RUNELF) dhrystone.riscv
+#	 ./$(OUT_RUNELF) 	 qsort.riscv
+#	 ./$(OUT_RUNELF) memcpy.riscv
+#	 ./$(OUT_RUNELF) multiply.riscv
 
 # Clean target
 clean:

@@ -6,6 +6,8 @@
 
 #include "riscv-vm-portable.h"
 
+#define SYS_write 64
+
 // 1 MiB, memory available inside VM
 const int VM_MEMORY = 1048576;
 // 32 registers, 32 bits each
@@ -18,6 +20,10 @@ const size_t alignment = 64;
 const size_t work_mem_size = VM_MEMORY * 2; // size of memory to allocate
 
 const int ERR_OUT_OF_MEM = 124;
+
+// magic memory addres to communicate with the host
+const uint32_t tohost = 0x1000;
+const uint32_t fromhost = 0x1040;
 
 int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len);
 
@@ -61,21 +67,30 @@ void op_lui(uint8_t *wmem, uint32_t instruction);
 void op_auipc(uint8_t *wmem, uint32_t instruction, uint32_t pc);
 void op_int_imm_op(uint8_t *wmem, uint32_t instruction);
 void op_int_op(uint8_t *wmem, uint32_t instruction);
-void op_load(uint8_t *wmem, uint32_t instruction);
-void op_store(uint8_t *wmem, uint32_t instruction);
+void op_load(uint8_t *wmem, uint32_t instruction, uint32_t pc);
+void op_store(uint8_t *wmem, uint32_t instruction, uint32_t pc);
 
 void dbg_dump_registers_short(uint8_t *wmem);
 
 int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
+  uint8_t *wmem_ended = wmem + work_mem_size;
   uint32_t pc = 0;
-  volatile uint32_t *pcp = (uint32_t *)(wmem + REG_MEM_SIZE);
-  uint32_t *program_end = pcp + program_len;
+  uint32_t *pcp = (uint32_t *)(wmem + REG_MEM_SIZE);
+  uint32_t *program_end = (uint32_t *)(wmem + REG_MEM_SIZE + program_len);
   uint8_t opcode = 0;
   uint32_t instruction = 0;
   printf("running instructions:\n");
   uint8_t going = 0;
+  uint32_t executed = 0;
 
   for (; pcp < program_end;) {
+    // if (++executed > 10000) {
+    //   exit(84);
+    // }
+    if (pcp >= wmem_ended) {
+      fprintf(stderr, "pcp 0x%X went beyond allocated memory\n", pcp);
+      exit(11);
+    }
     instruction = *pcp;
     // printf(">>> pcp 0x%X inst %04X pe %X\n", pcp, instruction, program_end);
     // printf(">>> pcp 0x%X inst %04X pe %X\n", pcp, instruction, program_end);
@@ -86,13 +101,18 @@ int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
     pc = (uint32_t)((uint8_t *)pcp - (wmem + REG_MEM_SIZE));
     // printf("pc %02X inst %08X opcode %02X (%07b)\n", pc,instruction, opcode,
     // opcode);
-    printf("---> pc 0x%02X inst %08X opcode 0x%02X\n", pc, instruction, opcode);
-    dbg_dump_registers_short(wmem);
-    print_binary_32(instruction);
-    printf("addr %04X pc 0x%02X inst 0x%08X opcode 0x%02X (", pcp, pc,
-           instruction, opcode);
-    print_binary_8(opcode);
-    printf(") - 8 bit %02X\n", instruction & 0xFF);
+    if (LOG_DEBUG) {
+      printf("---> pc 0x%02X inst %08X opcode 0x%02X\n", pc, instruction,
+             opcode);
+    }
+    if (LOG_TRACE) {
+      dbg_dump_registers_short(wmem);
+      print_binary_32(instruction);
+      printf("addr %04X pc 0x%02X inst 0x%08X opcode 0x%02X (", pcp, pc,
+             instruction, opcode);
+      print_binary_8(opcode);
+      printf(") - 8 bit %02X\n", instruction & 0xFF);
+    }
     switch (opcode) {
     case 0x73:
       op_system(wmem, instruction);
@@ -121,13 +141,17 @@ int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
       op_int_op(wmem, instruction);
       break;
     case 0x03:
-      op_load(wmem, instruction);
+      op_load(wmem, instruction, pc);
       break;
     case 0x23:
-      op_store(wmem, instruction);
+      op_store(wmem, instruction, pc);
       break;
-
+    case 0x0F:
+      // misc-mem opcode, nop
+      break;
     default:
+      fprintf(stderr, "unknown opcode %02X\n", opcode);
+      exit(14);
       break;
     }
     // printf("------------------\n");
@@ -137,7 +161,7 @@ int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
   return 0;
 }
 
-void op_store(uint8_t *wmem, uint32_t instruction) {
+void op_store(uint8_t *wmem, uint32_t instruction, uint32_t pc) {
   uint32_t *reg = (uint32_t *)wmem;
   const uint8_t funct3 = (instruction >> 12) & 0x7;
   const uint8_t rs1 = (instruction >> 15) & 0x1F;
@@ -146,10 +170,12 @@ void op_store(uint8_t *wmem, uint32_t instruction) {
       (instruction & 0xFE000000) | ((instruction & 0xF80) << 13);
   const int32_t immi = ((int32_t)imm) >> 20;
 
-  const uint32_t addr = reg[rs1] + immi;
+  uint32_t addr = reg[rs1] + immi;
 
-  printf("store rs1 %d rs2 %d width %d immi %d addr 0x%04X\n", rs1, rs2, funct3,
-         immi, addr);
+  if (LOG_TRACE) {
+    printf("store rs1 %d rs2 %d width %d immi %d addr 0x%04X\n", rs1, rs2,
+           funct3, immi, addr);
+  }
   if (addr == UART_OUT_REGISTER) {
     uint8_t byte;
     uint16_t half;
@@ -172,6 +198,50 @@ void op_store(uint8_t *wmem, uint32_t instruction) {
     }
     return;
   }
+  // stupid hack to account for code that uses absoulte addresses and start
+  // virtual memory from 0x80000000
+  addr &= 0x7FFFFFFF;
+
+  if ((REG_MEM_SIZE + addr) >= work_mem_size) {
+    fprintf(stderr,
+            "store went beyond allocated memory pc %X (addr %0X) (instruction "
+            "%X)\n",
+            pc, addr, instruction);
+    exit(11);
+  }
+  if (addr == tohost) {
+    uint32_t from_virt = reg[rs2];
+    if (LOG_TRACE) {
+      printf("==================================> GOT MAGIC VALUE %X (%d)\n",
+             from_virt, from_virt);
+    }
+    uint8_t is_exit = from_virt & 1;
+    uint8_t exit_code = from_virt >> 1;
+    if (is_exit) {
+      printf("exit code %d\n", exit_code);
+      exit(exit_code);
+    }
+    from_virt = *(uint32_t *)(wmem + REG_MEM_SIZE + reg[rs2]);
+    if (from_virt == SYS_write) {
+      uint32_t a0 = *(uint32_t *)(wmem + REG_MEM_SIZE + reg[rs2] + 8);
+      uint32_t str_ptr = *(uint32_t *)(wmem + REG_MEM_SIZE + reg[rs2] + 16);
+      uint32_t str_len = *(uint32_t *)(wmem + REG_MEM_SIZE + reg[rs2] + 24);
+      if (LOG_TRACE) {
+        printf("==================================> sys write str ptr 0x%X str "
+               "len %d\n",
+               str_ptr, str_len);
+      }
+      // printf("OUT:");
+      for (int i = 0; i < str_len; i++) {
+        printf("%c", wmem[REG_MEM_SIZE + str_ptr + i]);
+      }
+    } else {
+      fprintf(stderr, "unimplemented magic syscall %d\n", from_virt);
+      exit(49);
+    }
+    wmem[REG_MEM_SIZE + fromhost] = 1;
+    return;
+  }
 
   switch (funct3) {
   case 0: // sb
@@ -188,7 +258,7 @@ void op_store(uint8_t *wmem, uint32_t instruction) {
   }
 }
 
-void op_load(uint8_t *wmem, uint32_t instruction) {
+void op_load(uint8_t *wmem, uint32_t instruction, uint32_t pc) {
   uint32_t *reg = (uint32_t *)wmem;
   const uint8_t funct3 = (instruction >> 12) & 0x7;
   const uint8_t rs1 = (instruction >> 15) & 0x1F;
@@ -200,6 +270,16 @@ void op_load(uint8_t *wmem, uint32_t instruction) {
   const uint32_t imm = (instruction & 0xFFF00000);
   const int32_t immi = ((int32_t)imm) >> 20;
   uint32_t addr = reg[rs1] + immi;
+  // stupid hack to account for code that uses absoulte addresses and start
+  // virtual memory from 0x80000000
+  addr &= 0x7FFFFFFF;
+  if ((REG_MEM_SIZE + addr) >= work_mem_size) {
+    fprintf(
+        stderr,
+        "load went beyond allocated memory pc %X (addr %0X) (instruction %X)\n",
+        pc, addr, instruction);
+    exit(11);
+  }
   switch (funct3) {
   case 0: // lb
     reg[rd] = (int8_t)wmem[REG_MEM_SIZE + addr];
@@ -220,8 +300,10 @@ void op_load(uint8_t *wmem, uint32_t instruction) {
     break;
   }
 
-  printf("load width %d rs1 %d rd %d imm %d addr 0x%02X rd_new_val 0x%04X\n",
-         funct3, rs1, rd, immi, addr, reg[rd]);
+  if (LOG_TRACE) {
+    printf("load width %d rs1 %d rd %d imm %d addr 0x%02X rd_new_val 0x%04X\n",
+           funct3, rs1, rd, immi, addr, reg[rd]);
+  }
 }
 
 void op_int_op(uint8_t *wmem, uint32_t instruction) {
@@ -312,8 +394,11 @@ void op_int_op(uint8_t *wmem, uint32_t instruction) {
       break;
     }
   }
-  printf("int reg-reg op %d rd %d rs1 %d rs2 %d rd_new_val 0x%04X funct7 %d\n",
-         funct3, rd, rs1, rs2, reg[rd], funct7);
+  if (LOG_TRACE) {
+    printf(
+        "int reg-reg op %d rd %d rs1 %d rs2 %d rd_new_val 0x%04X funct7 %d\n",
+        funct3, rd, rs1, rs2, reg[rd], funct7);
+  }
 }
 
 void op_int_imm_op(uint8_t *wmem, uint32_t instruction) {
@@ -365,8 +450,10 @@ void op_int_imm_op(uint8_t *wmem, uint32_t instruction) {
     default:
       break;
     }
-    printf("int op %d rd %d rs %d imm 0x%02X (%d) rd_new_val 0x%04X\n", funct3,
-           rd, rs1, immi, immi, reg[rd]);
+    if (LOG_TRACE) {
+      printf("int op %d rd %d rs %d imm 0x%02X (%d) rd_new_val 0x%04X\n",
+             funct3, rd, rs1, immi, immi, reg[rd]);
+    }
   }
 }
 
@@ -375,8 +462,10 @@ void op_auipc(uint8_t *wmem, uint32_t instruction, uint32_t pc) {
   const uint8_t rd = (instruction >> 7) & 0x1F;
   const uint32_t imm = instruction & 0xFFFFF000;
   const uint32_t new_rd_val = pc + imm;
-  printf("auipc rd %02d imm 0x%04X pc 0x%02X new_rd_val 0x%02X\n", rd, imm, pc,
-         new_rd_val);
+  if (LOG_TRACE) {
+    printf("auipc rd %02d imm 0x%04X pc 0x%02X new_rd_val 0x%02X\n", rd, imm,
+           pc, new_rd_val);
+  }
   if (rd != 0) {
     reg[rd] = new_rd_val;
   }
@@ -386,7 +475,9 @@ void op_lui(uint8_t *wmem, uint32_t instruction) {
   uint32_t *reg = (uint32_t *)wmem;
   const uint8_t rd = (instruction >> 7) & 0x1F;
   const uint32_t imm = instruction & 0xFFFFF000;
-  printf("lui rd %02d imm 0x%04X\n", rd, imm);
+  if (LOG_TRACE) {
+    printf("lui rd %02d imm 0x%04X\n", rd, imm);
+  }
   if (rd != 0) {
     reg[rd] = imm;
   }
@@ -406,8 +497,14 @@ void op_jal(uint8_t *wmem, uint32_t instruction, uint8_t **pcp, uint32_t pc) {
     reg[rd] = next_pc;
   }
   *pcp += immi;
-  printf("jal rd %02d imm 0x%04X (%d) next_pc 0x%02X\n", rd, imm, immi,
-         next_pc);
+  if (LOG_TRACE) {
+    printf("jal rd %02d imm 0x%04X (%d) next_pc 0x%02X\n", rd, immi, immi,
+           next_pc);
+  }
+  if (immi & 0x3) {
+    fprintf(stderr, "!! addr not aligned %X\n", immi);
+    exit(1);
+  }
 }
 
 void op_jalr(uint8_t *wmem, uint32_t instruction, uint8_t **pcp, uint32_t pc) {
@@ -419,14 +516,18 @@ void op_jalr(uint8_t *wmem, uint32_t instruction, uint8_t **pcp, uint32_t pc) {
   const uint8_t rd = (instruction >> 7) & 0x1F;
   const uint32_t imm = (instruction & 0xFFF00000);
   const int32_t immi = ((int32_t)imm) >> 20;
-  const uint32_t addr = (reg[rs1] + immi) & 0xFFFFFFFE;
+  const int32_t addr = ((int32_t)reg[rs1] + immi) & 0xFFFFFFFE;
 
   if (rd) {
     reg[rd] = next_pc;
   }
   *pcp = wmem + REG_MEM_SIZE + addr;
-  printf("jalr rd %02d rs1 %d addr %02X immi %d next_pc 0x%02X\n", rd, rs1,
-         addr, immi, next_pc);
+  if (LOG_TRACE) {
+    uint32_t new_pc = pc + (addr / 4);
+    printf(
+        "jalr rd %02d rs1 %d addr %02X (%d) immi %d next_pc 0x%02X new_pc %X\n",
+        rd, rs1, addr, addr, immi, next_pc, new_pc);
+  }
   if (addr & 0x3) {
     fprintf(stderr, "!! addr not aligned %X\n", addr);
     exit(1);
@@ -434,7 +535,9 @@ void op_jalr(uint8_t *wmem, uint32_t instruction, uint8_t **pcp, uint32_t pc) {
 }
 
 uint8_t op_branch(uint8_t *wmem, uint32_t instruction, uint8_t **pcp) {
-  print_binary_32(instruction);
+  if (LOG_TRACE) {
+    print_binary_32(instruction);
+  }
   const uint8_t funct3 = (instruction >> 12) & 0x7;
   const uint8_t rs1 = (instruction >> 15) & 0x1F;
   const uint8_t rs2 = (instruction >> 20) & 0x1F;
@@ -469,9 +572,15 @@ uint8_t op_branch(uint8_t *wmem, uint32_t instruction, uint8_t **pcp) {
     is_taken = reg[rs1] >= reg[rs2];
     break;
   }
-  printf("branch funct3 %01X rs1 %d rs2 %d imms %d is_taken %d\n", funct3, rs1,
-         rs2, imms, is_taken);
+  if (LOG_TRACE) {
+    printf("branch funct3 %01X rs1 %d rs2 %d imms %d is_taken %d\n", funct3,
+           rs1, rs2, imms, is_taken);
+  }
   *pcp += is_taken ? imms : 0;
+  if (is_taken && imms & 0x3) {
+    fprintf(stderr, "!! addr not aligned %X\n", imms);
+    exit(1);
+  }
   return is_taken;
 }
 
