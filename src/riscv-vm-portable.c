@@ -332,12 +332,19 @@ void op_int_op(uint8_t *wmem, uint32_t instruction) {
       reg[rd] = ((uint64_t)reg[rs1] * (uint64_t)reg[rs2]) >> 32;
       break;
     case 4: // div
-      if (reg[rs2] == 0) {
+    {
+      int32_t v1 = reg[rs1];
+      int32_t v2 = reg[rs2];
+      if (v2 == 0) {
         reg[rd] = 0xFFFFFFFF;
+      } else if (v1 == -2147483648 && v2 == -1) {
+        // integer overflow
+        reg[rd] = v1;
       } else {
-        reg[rd] = (int32_t)reg[rs1] / (int32_t)reg[rs2];
+        reg[rd] = v1 / v2;
       }
       break;
+    }
     case 5: // divu
       if (reg[rs2] == 0) {
         reg[rd] = 0xFFFFFFFF;
@@ -346,11 +353,33 @@ void op_int_op(uint8_t *wmem, uint32_t instruction) {
       }
       break;
     case 6: // rem
-      reg[rd] = (int32_t)reg[rs1] % (int32_t)reg[rs2];
+    {
+      int32_t v1 = reg[rs1];
+      int32_t v2 = reg[rs2];
+      if (v2 == 0) {
+        reg[rd] = v1;
+      } else if (v1 == -2147483648 && v2 == -1) {
+        // integer overflow
+        reg[rd] = 0;
+      } else {
+        reg[rd] = v1 % v2;
+      }
       break;
+    }
     case 7: // remu
-      reg[rd] = reg[rs1] % reg[rs2];
+    {
+      uint32_t v1 = reg[rs1];
+      uint32_t v2 = reg[rs2];
+      if (v2 == 0) {
+        reg[rd] = v1;
+      } else if (v1 == -2147483648 && v2 == -1) {
+        // integer overflow
+        reg[rd] = 0;
+      } else {
+        reg[rd] = v1 % v2;
+      }
       break;
+    }
     default:
       break;
     }
