@@ -2,4 +2,6 @@
 *.bin
 /src/simple
 /src/runelf
+/backups
+/log.txt
 

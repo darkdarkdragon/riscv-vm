@@ -5,7 +5,7 @@
 make runelf
 
 # Define the target directory
-TARGET_DIR="../mess/riscv-tests/isa"
+TARGET_DIR="../compiled-tests"
 
 echo "Running RV32UI tests"
 for file in "$TARGET_DIR"/rv32ui-p-*; do
