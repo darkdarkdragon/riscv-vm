@@ -31,7 +31,8 @@ static const int ERR_WFI = 99;
 static const uint32_t tohost = 0x1000;
 static const uint32_t fromhost = 0x1040;
 
-void dump_registers(uint8_t *registers);
+static void dump_registers(uint8_t *registers);
+static void dbg_dump_registers_short(uint8_t *wmem);
 
 int riscv_vm_main_loop(uint8_t *initial_registers, uint8_t *wmem,
                        uint32_t program_len, uint32_t *pcp_out);
@@ -59,9 +60,9 @@ int riscv_vm_run_optimized_1(uint8_t *registers, uint8_t *program,
 #endif
       return ERR_OUT_OF_MEM;
     }
+    memset(registers, 0, REG_MEM_SIZE);
   }
   dump_registers(registers);
-  memset(registers, 0, REG_MEM_SIZE);
   int res = riscv_vm_main_loop(registers, wmem, program_len, &pcp);
   dump_registers(registers);
 #if USE_PRINT
@@ -78,7 +79,10 @@ int riscv_vm_run_optimized_1(uint8_t *registers, uint8_t *program,
 #define GET_FUNCT7(inst) ((inst) >> 25) & 0x7F
 #define GET_IMM_I(inst) ((int32_t)(inst) >> 20)
 #define GET_IMM_U(inst) ((inst) & 0xFFFFF000)
-#define GET_IMM_S(inst) ((int32_t)(((inst) >> 25) << 5) + ((inst) >> 7) & 0x1F)
+// #define GET_IMM_S(inst) ((int32_t)(((inst) >> 25) << 5) + ((inst) >> 7) &
+// 0x1F)
+#define GET_IMM_S(inst)                                                        \
+  ((int32_t)((inst & 0xFE000000) | ((inst & 0xF80) << 13)) >> 20)
 
 static inline int op_load(uint32_t *registers, uint8_t *wmem,
                           uint32_t instruction, uint32_t pc);
@@ -106,17 +110,21 @@ static inline int op_system(uint32_t *registers, uint32_t instruction,
 int riscv_vm_main_loop(uint8_t *initial_registers, uint8_t *wmem,
                        uint32_t program_len, uint32_t *pcp_out) {
   uint32_t registers[32];
-  uint32_t *program = (uint32_t *)wmem;
+  uint8_t *program = wmem;
   uint32_t pc = 0;
   uint32_t instruction;
   int res = 0;
   memcpy(registers, initial_registers, REG_MEM_SIZE);
   while (res == 0) {
-    instruction = program[pc];
-    printf("PC: %0X\n", pc);
+    instruction = *(uint32_t *)(program + pc);
+#if LOG_TRACE
+    printf("PC: 0x%04X inst 0x%08X ", pc, instruction);
+    dbg_dump_registers_short(registers);
+    //  printf("\n");
+#endif
     switch (instruction & 0x7F) {
     case 0x03:
-      if ((res = op_load(registers, (uint8_t *)program, instruction, pc))) {
+      if ((res = op_load(registers, program, instruction, pc))) {
         exit_loop(res);
       }
       break;
@@ -130,7 +138,7 @@ int riscv_vm_main_loop(uint8_t *initial_registers, uint8_t *wmem,
       op_auipc(registers, instruction, pc);
       break;
     case 0x23:
-      if (op_store(registers, (uint8_t *)program, instruction, pc, &res)) {
+      if (op_store(registers, program, instruction, pc, &res)) {
         exit_loop(res);
       }
       break;
@@ -163,7 +171,7 @@ int riscv_vm_main_loop(uint8_t *initial_registers, uint8_t *wmem,
 #endif
       exit_loop(ERR_UNIMPLEMENTED_OPCODE) break;
     }
-    pc++;
+    pc += 4;
   }
   exit_loop(res);
 }
@@ -175,6 +183,9 @@ static inline int op_load(uint32_t *registers, uint8_t *wmem,
     return 0;
   }
   uint32_t addr = registers[GET_RS1(instruction)] + GET_IMM_I(instruction);
+#if LOG_TRACE
+  printf("op_load addr 0x%x imm %d\n", addr, GET_IMM_I(instruction));
+#endif
   // hack to account for code that uses absoulte addresses and start
   // virtual memory from 0x80000000
   addr &= 0x7FFFFFFF;
@@ -207,28 +218,30 @@ static inline int op_load(uint32_t *registers, uint8_t *wmem,
 #if DISALLOW_MISALIGNED
     if (addr & 3) {
 #if USE_PRINT
-      fprintf(stderr, "misaligned load at pc %X (addr %0X) (instruction %X)\n",
+      fprintf(stderr,
+              "misaligned load at pc 0x%X (addr 0x%0X) (instruction 0x%X)\n",
               pc, addr, instruction);
 #endif
       return ERR_MISALIGNED_MEMORY_ACCESS;
     }
 #endif
-    registers[rd] = *(uint32_t *)(wmem + REG_MEM_SIZE + addr);
+    registers[rd] = *(uint32_t *)(wmem + addr);
     break;
   case 4: // lbu
-    registers[rd] = wmem[REG_MEM_SIZE + addr];
+    registers[rd] = wmem[addr];
     break;
   case 5: // lhu
 #if DISALLOW_MISALIGNED
     if (addr & 1) {
 #if USE_PRINT
-      fprintf(stderr, "misaligned load at pc %X (addr %0X) (instruction %X)\n",
+      fprintf(stderr,
+              "misaligned load at pc 0x%X (addr 0x%0X) (instruction 0x%X)\n",
               pc, addr, instruction);
 #endif
       return ERR_MISALIGNED_MEMORY_ACCESS;
     }
 #endif
-    registers[rd] = *(uint16_t *)(wmem + REG_MEM_SIZE + addr);
+    registers[rd] = *(uint16_t *)(wmem + addr);
     break;
   default:
     break;
@@ -297,6 +310,9 @@ static inline int op_store(uint32_t *registers, uint8_t *wmem,
   const uint8_t funct3 = GET_FUNCT3(instruction);
   const uint32_t v2 = registers[GET_RS2(instruction)];
   uint32_t addr = registers[GET_RS1(instruction)] + GET_IMM_S(instruction);
+#if LOG_TRACE
+  printf("op_store addr 0x%x imm %d\n", addr, GET_IMM_S(instruction));
+#endif
 
 #if EMULATE_UART_OUT
   if (addr == UART_OUT_REGISTER) {
@@ -405,7 +421,7 @@ static inline void op_int_op(uint32_t *registers, uint32_t instruction) {
   if (funct7 == 1) { // M extension
     switch (funct3) {
     case 0: // mul
-      registers[rd] = v1 * v2;
+      registers[rd] = (int32_t)v1 * (int32_t)v2;
       break;
     case 1: // mulh
       registers[rd] = ((int64_t)(int32_t)v1 * (int64_t)(int32_t)v2) >> 32;
@@ -420,11 +436,11 @@ static inline void op_int_op(uint32_t *registers, uint32_t instruction) {
     {
       if (v2 == 0) {
         registers[rd] = 0xFFFFFFFF;
-      } else if (v1 == INT_MIN_HEX && v2 == -1) {
+      } else if (v1 == INT_MIN_HEX && (int32_t)v2 == -1) {
         // integer overflow
         registers[rd] = v1;
       } else {
-        registers[rd] = v1 / v2;
+        registers[rd] = (int32_t)v1 / (int32_t)v2;
       }
       break;
     }
@@ -439,11 +455,11 @@ static inline void op_int_op(uint32_t *registers, uint32_t instruction) {
     {
       if (v2 == 0) {
         registers[rd] = v1;
-      } else if (v1 == INT_MIN_HEX && v2 == -1) {
+      } else if (v1 == INT_MIN_HEX && (int32_t)v2 == -1) {
         // integer overflow
         registers[rd] = 0;
       } else {
-        registers[rd] = v1 % v2;
+        registers[rd] = (int32_t)v1 % (int32_t)v2;
       }
       break;
     }
@@ -451,9 +467,9 @@ static inline void op_int_op(uint32_t *registers, uint32_t instruction) {
     {
       if (v2 == 0) {
         registers[rd] = v1;
-      } else if (v1 == INT_MIN_HEX && v2 == -1) {
-        // integer overflow
-        registers[rd] = 0;
+        // } else if (v1 == INT_MIN_HEX && ()v2 == -1) {
+        //   // integer overflow
+        //   registers[rd] = 0;
       } else {
         registers[rd] = v1 % v2;
       }
@@ -506,7 +522,7 @@ static inline void op_int_op(uint32_t *registers, uint32_t instruction) {
 
 static inline void op_lui(uint32_t *registers, uint32_t instruction) {
   const uint8_t rd = GET_RD(instruction);
-  if (rd != 0) {
+  if (rd) {
     registers[rd] = GET_IMM_U(instruction);
   }
 }
@@ -542,6 +558,10 @@ static inline uint8_t op_branch(uint32_t *registers, uint32_t instruction,
     is_taken = v1 >= v2;
     break;
   }
+#if LOG_TRACE
+  printf("PC 0x%0X is_taken %d imms %d instruction 0x%04X\n", *pc, is_taken,
+         imms, instruction);
+#endif
   if (is_taken) {
     if (imms & 3) {
 #if USE_PRINT
@@ -553,7 +573,7 @@ static inline uint8_t op_branch(uint32_t *registers, uint32_t instruction,
       *exit_code = ERR_MISALIGNED_MEMORY_ACCESS;
       return 0;
     }
-    *pc += (imms / 4);
+    *pc += imms;
   }
   return is_taken;
 }
@@ -562,9 +582,8 @@ static inline void op_jalr(uint32_t *registers, uint32_t instruction,
                            uint32_t *pc, int *exit_code) {
   const uint8_t rd = GET_RD(instruction);
 
-  const int32_t addr =
-      ((int32_t)registers[GET_RS1(instruction)] + GET_IMM_I(instruction)) &
-      0xFFFFFFFE;
+  const uint32_t addr =
+      (registers[GET_RS1(instruction)] + GET_IMM_I(instruction)) & 0xFFFFFFFE;
 
   if (rd) {
     registers[rd] = *pc + 4;
@@ -572,12 +591,12 @@ static inline void op_jalr(uint32_t *registers, uint32_t instruction,
   if (addr & 0x3) {
 #if USE_PRINT
     fprintf(stderr,
-            "misaligned jalr at pc %0X (instruction %X) address change %d (0x%0X)\n", *pc,
-            instruction, addr, addr);
+            "misaligned jalr at pc %0X (instruction %X) new address 0x%0X\n",
+            *pc, instruction, addr);
 #endif
     *exit_code = ERR_MISALIGNED_MEMORY_ACCESS;
   }
-  *pc += (addr / 4);
+  *pc = addr;
 }
 
 static inline void op_jal(uint32_t *registers, uint32_t instruction,
@@ -600,7 +619,7 @@ static inline void op_jal(uint32_t *registers, uint32_t instruction,
 #endif
     *exit_code = ERR_MISALIGNED_MEMORY_ACCESS;
   }
-  *pc += (immi / 4);
+  *pc += immi;
 }
 
 static inline int op_ecall(uint32_t *registers, uint32_t instruction,
@@ -692,9 +711,8 @@ static inline int op_system(uint32_t *registers, uint32_t instruction,
     switch (csr) {
     case 0xF14: // mhartid (Hardware thread ID.)
     {
-      //   uint32_t *reg = (uint32_t *)(wmem + REG_MEM_SIZE);
       if (rd) {
-        ((uint32_t *)registers)[rd] = 0;
+        registers[rd] = 0;
       }
     } break;
     default:
@@ -719,7 +737,7 @@ static inline int op_system(uint32_t *registers, uint32_t instruction,
   return 0;
 }
 
-void dump_registers(uint8_t *registers) {
+static void dump_registers(uint8_t *registers) {
 #if USE_PRINT
   uint32_t *reg = (uint32_t *)registers;
   printf("registers:\n");
@@ -729,4 +747,15 @@ void dump_registers(uint8_t *registers) {
   }
   printf("\n");
 #endif
+}
+
+void dbg_dump_registers_short(uint8_t *wmem) {
+  uint32_t *reg = (uint32_t *)wmem;
+  for (int i = 0; i < 32; i++) {
+    uint32_t val = reg[i];
+    if (val) {
+      printf("%02d 0x%04X ", i, val);
+    }
+  }
+  printf("\n");
 }

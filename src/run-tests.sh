@@ -17,7 +17,7 @@ for file in "$TARGET_DIR"/rv32ui-p-*; do
     echo "Executing file: $file"
     
     # Run the `runelf` program with the current file
-    ./runelf "$file"
+    ./runelf "$file" -opt
     
     # Check the exit status of `runelf`
     if [[ $? -ne 0 ]]; then
@@ -41,7 +41,7 @@ for file in "$TARGET_DIR"/rv32um-p-*; do
     echo "Executing file: $file"
     
     # Run the `runelf` program with the current file
-    ./runelf "$file"
+    ./runelf "$file" -opt
     
     # Check the exit status of `runelf`
     if [[ $? -ne 0 ]]; then

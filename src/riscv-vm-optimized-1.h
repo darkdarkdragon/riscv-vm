@@ -5,7 +5,7 @@
 #define LOG_TRACE 0
 #define LOG_DEBUG 0
 #define USE_PRINT 1
-#define DISALLOW_MISALIGNED 1
+#define DISALLOW_MISALIGNED 0
 #define EMULATE_UART_OUT 1
 // used by benchmarks in https://github.com/riscv-software-src/riscv-tests
 #define USE_TOHOST_SYSCALL 1

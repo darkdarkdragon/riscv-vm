@@ -3,8 +3,8 @@
 CC = gcc
 
 # Compiler flags
-#CFLAGS = -Wall -Wextra -O2
-CFLAGS = 
+CFLAGS = -Wall -Wextra -O3
+# CFLAGS = 
 
 # Target executable name
 # TARGET = simple runelf

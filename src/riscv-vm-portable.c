@@ -98,6 +98,8 @@ static int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
     }
     opcode = instruction & 0x7F;
     pc = (uint32_t)((uint8_t *)pcp - (wmem + REG_MEM_SIZE));
+    printf("PC: 0x%04X inst 0x%08X ", pc, instruction);
+    dbg_dump_registers_short(wmem);
     // printf("pc %02X inst %08X opcode %02X (%07b)\n", pc,instruction, opcode,
     // opcode);
     if (LOG_DEBUG) {
@@ -287,6 +289,11 @@ void op_load(uint8_t *wmem, uint32_t instruction, uint32_t pc) {
     reg[rd] = *(int16_t *)(wmem + REG_MEM_SIZE + addr);
     break;
   case 2: // lw
+    if (addr & 3) {
+      fprintf(stderr, "misaligned load at pc 0x%X (addr 0x%0X) (instruction 0x%X)\n",
+              pc, addr, instruction);
+              exit(22);
+    }
     reg[rd] = *(uint32_t *)(wmem + REG_MEM_SIZE + addr);
     break;
   case 4: // lbu
@@ -740,11 +747,11 @@ void print_binary_32(uint32_t value) {
 
 void dbg_dump_registers_short(uint8_t *wmem) {
   uint32_t *reg = (uint32_t *)wmem;
-  printf("registers: ");
+  // printf("registers: ");
   for (int i = 0; i < 32; i++) {
     uint32_t val = reg[i];
     if (val) {
-      printf("reg %02d 0x%04X ", i, val);
+      printf("%02d 0x%04X ", i, val);
     }
   }
   printf("\n");
