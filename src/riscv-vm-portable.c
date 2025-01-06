@@ -8,23 +8,23 @@
 #define SYS_write 64
 
 // 1 MiB, memory available inside VM
-const int VM_MEMORY = 1048576;
+static const int VM_MEMORY = 1048576;
 // 32 registers, 32 bits each
-const int REG_MEM_SIZE = 32 * 4;
+static const int REG_MEM_SIZE = 32 * 4;
 
 // io devices
-const uint32_t UART_OUT_REGISTER = 0x10000000;
+static const uint32_t UART_OUT_REGISTER = 0x10000000;
 
-const size_t alignment = 64;
-const size_t work_mem_size = VM_MEMORY * 2; // size of memory to allocate
+static const size_t alignment = 64;
+static const size_t work_mem_size = VM_MEMORY * 2; // size of memory to allocate
 
-const int ERR_OUT_OF_MEM = 124;
+static const int ERR_OUT_OF_MEM = 124;
 
 // magic memory addres to communicate with the host
-const uint32_t tohost = 0x1000;
+static const uint32_t tohost = 0x1000;
 const uint32_t fromhost = 0x1040;
 
-int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len);
+static int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len);
 
 int riscv_vm_run(uint8_t *registers, uint8_t *program, uint32_t program_len,
                  uint8_t *data, uint32_t data_len, uint32_t data_offset) {
@@ -71,7 +71,7 @@ void op_store(uint8_t *wmem, uint32_t instruction, uint32_t pc);
 
 void dbg_dump_registers_short(uint8_t *wmem);
 
-int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
+static int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
   uint8_t *wmem_ended = wmem + work_mem_size;
   uint32_t pc = 0;
   uint32_t *pcp = (uint32_t *)(wmem + REG_MEM_SIZE);
@@ -86,8 +86,8 @@ int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
     // if (++executed > 10000) {
     //   exit(84);
     // }
-    if (pcp >= wmem_ended) {
-      fprintf(stderr, "pcp 0x%X went beyond allocated memory\n", pcp);
+    if ((uint8_t *)pcp >= wmem_ended) {
+      fprintf(stderr, "pcp 0x%p went beyond allocated memory\n", (void *)pcp);
       exit(11);
     }
     instruction = *pcp;
@@ -107,7 +107,7 @@ int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
     if (LOG_TRACE) {
       dbg_dump_registers_short(wmem);
       print_binary_32(instruction);
-      printf("addr %04X pc 0x%02X inst 0x%08X opcode 0x%02X (", pcp, pc,
+      printf("addr %p pc 0x%02X inst 0x%08X opcode 0x%02X (", (void *)pcp, pc,
              instruction, opcode);
       print_binary_8(opcode);
       printf(") - 8 bit %02X\n", instruction & 0xFF);
@@ -371,7 +371,7 @@ void op_int_op(uint8_t *wmem, uint32_t instruction) {
       uint32_t v2 = reg[rs2];
       if (v2 == 0) {
         reg[rd] = v1;
-      } else if (v1 == -2147483648 && v2 == -1) {
+      } else if ((int32_t)v1 == -2147483648 && v2 == -1) {
         // integer overflow
         reg[rd] = 0;
       } else {

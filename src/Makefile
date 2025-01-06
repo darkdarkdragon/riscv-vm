@@ -47,7 +47,7 @@ CFLAGS =
 
 # Source files
 SRC_SIMPLE=simple.c riscv-vm-portable.c
-SRC_RUNELF=runelf.c riscv-vm-portable.c
+SRC_RUNELF=runelf.c riscv-vm-portable.c riscv-vm-optimized-1.c
 
 # Output executables
 OUT_SIMPLE=simple
@@ -67,7 +67,7 @@ run-simple: $(OUT_SIMPLE)
 	./$(OUT_SIMPLE)
 
 run-runelf: $(OUT_RUNELF)
-	./$(OUT_RUNELF) towers.riscv
+	./$(OUT_RUNELF) towers.riscv -verbose -opt
 #	./$(OUT_RUNELF) median.riscv
 #	 ./$(OUT_RUNELF) rv32ui-p-lh
 #	 ./$(OUT_RUNELF) dhrystone.riscv

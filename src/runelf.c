@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "riscv-vm-optimized-1.h"
 #include "riscv-vm-portable.h"
 
 /* ELF Definitions */
@@ -333,20 +334,21 @@ void run_elf32(void *file_data) {
   }
 }
 
-void run_elf32v2(void *file_data) {
+int run_elf32v2(void *file_data, int verbose, int use_optimized) {
   Elf32_Ehdr *ehdr = (Elf32_Ehdr *)file_data;
   Elf32_Phdr *phdr = (Elf32_Phdr *)((char *)file_data + ehdr->e_phoff);
   Elf32_Shdr *shdr = (Elf32_Shdr *)((char *)file_data + ehdr->e_shoff);
   char *strtab = (char *)file_data + shdr[ehdr->e_shstrndx].sh_offset;
-  printf("Architecture: %s\n", get_machine_name(ehdr->e_machine));
-  printf("Number of sections: %d\n", ehdr->e_shnum);
-  printf("Entry: 0x%x\n\n", ehdr->e_entry);
-
   uint8_t *text = 0;
   uint32_t text_len = 0;
+  if (verbose) {
+    printf("Architecture: %s\n", get_machine_name(ehdr->e_machine));
+    printf("Number of sections: %d\n", ehdr->e_shnum);
+    printf("Entry: 0x%x\n\n", ehdr->e_entry);
 
-  // Print Program Headers
-  printf("\nProgram Headers (%d):\n", ehdr->e_phnum);
+    // Print Program Headers
+    printf("\nProgram Headers (%d):\n", ehdr->e_phnum);
+  }
   for (int i = 0; i < ehdr->e_phnum; i++) {
     if (phdr[i].p_type == PT_LOAD) {
       if (text == 0) {
@@ -361,7 +363,10 @@ void run_elf32v2(void *file_data) {
       }
     }
   }
-  riscv_vm_run(NULL, text, text_len, 0, 0, 0);
+  if (use_optimized) {
+    return riscv_vm_run_optimized_1(NULL, text, text_len);
+  }
+  return riscv_vm_run(NULL, text, text_len, 0, 0, 0);
 }
 
 void process_elf64(void *file_data) {
@@ -375,21 +380,33 @@ void process_elf64(void *file_data) {
   for (int i = 0; i < ehdr->e_shnum; i++) {
     printf("Section %2d: %s\n", i, &strtab[shdr[i].sh_name]);
     printf("Type: %s\n", get_section_type(shdr[i].sh_type));
-    printf("Address: 0x%lx\n", shdr[i].sh_addr);
-    printf("Offset: 0x%lx\n", shdr[i].sh_offset);
-    printf("Size: %lu bytes\n", shdr[i].sh_size);
+    printf("Address: 0x%llx\n", shdr[i].sh_addr);
+    printf("Offset: 0x%llx\n", shdr[i].sh_offset);
+    printf("Size: %llu bytes\n", shdr[i].sh_size);
     print_section_flags(shdr[i].sh_flags);
     printf("\n");
   }
 }
 
 int main(int argc, char *argv[]) {
-  if (argc != 2) {
-    fprintf(stderr, "Usage: %s <elf-file>\n", argv[0]);
+  int use_optimized = 0;
+  int verbose = 0;
+  int file_index = 1;
+  if (argc < 2 || argc > 4) {
+    fprintf(stderr, "Usage: [-opt] [-verbose] %s <elf-file>\n", argv[0]);
     return 1;
   }
-
-  int fd = open(argv[1], O_RDONLY);
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "-opt") == 0) {
+      use_optimized = 1;
+    } else if (strcmp(argv[i], "-verbose") == 0) {
+      verbose = 1;
+    } else {
+      file_index = i;
+    }
+  }
+  printf("Loading file %s\n", argv[file_index]);
+  int fd = open(argv[file_index], O_RDONLY);
   if (fd < 0) {
     perror("Error opening file");
     return 1;
@@ -417,12 +434,15 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  print_elf_header_info(e_ident);
+  if (verbose) {
+    print_elf_header_info(e_ident);
+  }
 
+  int exit_code = 0;
   if (e_ident[EI_CLASS] == ELFCLASS32) {
     // process_elf32(file_data);
     // run_elf32(file_data);
-    run_elf32v2(file_data);
+    exit_code = run_elf32v2(file_data, verbose, use_optimized);
   } else if (e_ident[EI_CLASS] == ELFCLASS64) {
     // process_elf64(file_data);
     fprintf(stderr, "Can't run 64 bit programs\n");
@@ -432,5 +452,5 @@ int main(int argc, char *argv[]) {
 
   munmap(file_data, st.st_size);
   close(fd);
-  return 0;
+  return exit_code;
 }
