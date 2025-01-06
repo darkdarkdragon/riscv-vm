@@ -4,4 +4,5 @@
 /src/runelf
 /backups
 /log.txt
+/src/*.riscv
 
