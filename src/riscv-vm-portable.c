@@ -98,8 +98,8 @@ static int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
     }
     opcode = instruction & 0x7F;
     pc = (uint32_t)((uint8_t *)pcp - (wmem + REG_MEM_SIZE));
-    printf("PC: 0x%04X inst 0x%08X ", pc, instruction);
-    dbg_dump_registers_short(wmem);
+    // printf("PC: 0x%04X inst 0x%08X ", pc, instruction);
+    // dbg_dump_registers_short(wmem);
     // printf("pc %02X inst %08X opcode %02X (%07b)\n", pc,instruction, opcode,
     // opcode);
     if (LOG_DEBUG) {
