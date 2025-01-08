@@ -68,8 +68,8 @@ run-simple: $(OUT_SIMPLE)
 
 run-runelf: $(OUT_RUNELF)
 #	./$(OUT_RUNELF) towers070.riscv -verbose -opt
-	./$(OUT_RUNELF) towers028.riscv -verbose -opt
-#	./$(OUT_RUNELF) median1m.riscv -opt
+#	./$(OUT_RUNELF) towers028.riscv -verbose -opt
+	./$(OUT_RUNELF) median1m.riscv -verbose -opt
 #	 ./$(OUT_RUNELF) rv32ui-p-lh
 #	 ./$(OUT_RUNELF) dhrystone.riscv -opt
 #	 ./$(OUT_RUNELF) 	 qsort.riscv

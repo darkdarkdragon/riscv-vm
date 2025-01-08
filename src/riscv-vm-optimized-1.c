@@ -3,16 +3,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "riscv-vm-optimized-1.h"
 #include "cycle-counter.h"
-
+#include "riscv-vm-optimized-1.h"
 
 #define SYS_write 64
 #define INT_MIN_HEX 0x80000000
 
 // 1 MiB, memory available inside VM
 // static const int VM_MEMORY = 1048576;
-static const int VM_MEMORY = 1048576 * 2;
+static const int VM_MEMORY = 1048576 * 16;
 // 32 registers, 32 bits each
 static const int REG_MEM_SIZE = 32 * 4;
 
@@ -20,7 +19,7 @@ static const int REG_MEM_SIZE = 32 * 4;
 static const uint32_t UART_OUT_REGISTER = 0x10000000;
 
 static const size_t alignment = 64;
-static const size_t work_mem_size = VM_MEMORY * 2; // size of memory to allocate
+static const size_t work_mem_size = VM_MEMORY * 1; // size of memory to allocate
 
 static const int ERR_OUT_OF_MEM = 124;
 static const int ERR_UNIMPLEMENTED_OPCODE = 123;
@@ -45,6 +44,18 @@ static uint64_t mcycle_val = 0;
 int riscv_vm_run_optimized_1(uint8_t *registers, uint8_t *program,
                              uint32_t program_len) {
 
+#if USE_PRINT
+  printf("Starting VM... work mem size %zu program len %d\n", work_mem_size,
+         program_len);
+#endif
+  if (program_len > work_mem_size) {
+#if USE_PRINT
+    fprintf(stderr,
+            "Program too long for memory, program size %d memory size %zu\n",
+            program_len, work_mem_size);
+            #endif
+    return ERR_OUT_OF_MEM;
+  }
   init_counter();
   uint8_t *wmem = aligned_alloc(alignment, work_mem_size);
   if (wmem == NULL) {
