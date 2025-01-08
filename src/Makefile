@@ -67,10 +67,11 @@ run-simple: $(OUT_SIMPLE)
 	./$(OUT_SIMPLE)
 
 run-runelf: $(OUT_RUNELF)
-	./$(OUT_RUNELF) towers.riscv -verbose -opt
-#	./$(OUT_RUNELF) median.riscv
+#	./$(OUT_RUNELF) towers070.riscv -verbose -opt
+	./$(OUT_RUNELF) towers028.riscv -verbose -opt
+#	./$(OUT_RUNELF) median1m.riscv -opt
 #	 ./$(OUT_RUNELF) rv32ui-p-lh
-#	 ./$(OUT_RUNELF) dhrystone.riscv
+#	 ./$(OUT_RUNELF) dhrystone.riscv -opt
 #	 ./$(OUT_RUNELF) 	 qsort.riscv
 #	 ./$(OUT_RUNELF) memcpy.riscv
 #	 ./$(OUT_RUNELF) multiply.riscv

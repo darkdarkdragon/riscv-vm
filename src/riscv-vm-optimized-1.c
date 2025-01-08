@@ -4,12 +4,15 @@
 #include <string.h>
 
 #include "riscv-vm-optimized-1.h"
+#include "cycle-counter.h"
+
 
 #define SYS_write 64
 #define INT_MIN_HEX 0x80000000
 
 // 1 MiB, memory available inside VM
-static const int VM_MEMORY = 1048576;
+// static const int VM_MEMORY = 1048576;
+static const int VM_MEMORY = 1048576 * 2;
 // 32 registers, 32 bits each
 static const int REG_MEM_SIZE = 32 * 4;
 
@@ -32,14 +35,17 @@ static const uint32_t tohost = 0x1000;
 static const uint32_t fromhost = 0x1040;
 
 static void dump_registers(uint8_t *registers);
-static void dbg_dump_registers_short(uint8_t *wmem);
+static void dbg_dump_registers_short(uint32_t *reg);
 
 int riscv_vm_main_loop(uint8_t *initial_registers, uint8_t *wmem,
                        uint32_t program_len, uint32_t *pcp_out);
 
+static uint64_t mcycle_val = 0;
+
 int riscv_vm_run_optimized_1(uint8_t *registers, uint8_t *program,
                              uint32_t program_len) {
 
+  init_counter();
   uint8_t *wmem = aligned_alloc(alignment, work_mem_size);
   if (wmem == NULL) {
     // Handle allocation failure
@@ -116,6 +122,7 @@ int riscv_vm_main_loop(uint8_t *initial_registers, uint8_t *wmem,
   int res = 0;
   memcpy(registers, initial_registers, REG_MEM_SIZE);
   while (res == 0) {
+    mcycle_val++;
     instruction = *(uint32_t *)(program + pc);
 #if LOG_TRACE
     printf("PC: 0x%04X inst 0x%08X ", pc, instruction);
@@ -317,8 +324,8 @@ static inline int op_store(uint32_t *registers, uint8_t *wmem,
 #if EMULATE_UART_OUT
   if (addr == UART_OUT_REGISTER) {
     uint8_t byte;
-    uint16_t half;
-    uint32_t word;
+    // uint16_t half;
+    // uint32_t word;
     switch (funct3) {
     case 0: // sb
       byte = (uint8_t)v2;
@@ -367,7 +374,7 @@ static inline int op_store(uint32_t *registers, uint8_t *wmem,
 #if USE_PRINT
       fprintf(stderr, "unimplemented magic syscall %d\n", from_virt);
 #endif
-      *exit_code = ERR_INVALID_MEMORY_ACCESS;
+      *exit_code = ERR_UNIMPLEMENTED_MAGIC_SYSCALL;
       return 1;
     }
     wmem[fromhost] = 1;
@@ -667,8 +674,8 @@ static inline int op_system(uint32_t *registers, uint32_t instruction,
                             int *ext_exit_code) {
   const uint8_t funct3 = GET_FUNCT3(instruction);
   const uint8_t funct7 = GET_FUNCT7(instruction);
-  const uint32_t v1 = registers[GET_RS1(instruction)];
-  const uint32_t v2 = registers[GET_RS2(instruction)];
+  // const uint32_t v1 = registers[GET_RS1(instruction)];
+  // const uint32_t v2 = registers[GET_RS2(instruction)];
 
   if (funct3 == 0x0) {
     switch (funct7) {
@@ -699,6 +706,9 @@ static inline int op_system(uint32_t *registers, uint32_t instruction,
   const uint32_t csr = (instruction >> 20) & 0xFFF;
 #if USE_PRINT && LOG_TRACE
   printf("rd %02d rs1 %02d csr %03X\n", rd, rs1, csr);
+  dbg_dump_registers_short(registers);
+  printf("CSR op rd %02d rs1 0x%02d csr 0x%03X funct3 %d\n", rd, rs1, csr,
+         funct3);
 #endif
 
   // csr functions
@@ -713,6 +723,30 @@ static inline int op_system(uint32_t *registers, uint32_t instruction,
     {
       if (rd) {
         registers[rd] = 0;
+      }
+    } break;
+    case 0x300: // mstatus (Machine status register.)
+    {
+      if (rd) {
+        registers[rd] = 0;
+      }
+    } break;
+    case 0x305: // mtvec (Machine trap-handler base address.)
+    {
+      if (rd) {
+        registers[rd] = 0;
+      }
+    } break;
+    case 0xb00: // mcycle (Machine cycle counter.)
+    {
+      if (rd) {
+        registers[rd] = get_cycles();
+      }
+    } break;
+    case 0xb02: // minstret (Machine instructions-retired counter.)
+    {
+      if (rd) {
+        registers[rd] = mcycle_val;
       }
     } break;
     default:
@@ -749,8 +783,7 @@ static void dump_registers(uint8_t *registers) {
 #endif
 }
 
-void dbg_dump_registers_short(uint8_t *wmem) {
-  uint32_t *reg = (uint32_t *)wmem;
+void dbg_dump_registers_short(uint32_t *reg) {
   for (int i = 0; i < 32; i++) {
     uint32_t val = reg[i];
     if (val) {
