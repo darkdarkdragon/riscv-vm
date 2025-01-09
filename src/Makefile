@@ -82,6 +82,18 @@ run-towers: $(OUT_RUNELF)
 spike-towers: $(OUT_RUNELF)
 	spike --isa=rv32gcv towers028.riscv
 
+run-median: $(OUT_RUNELF)
+	./$(OUT_RUNELF)  ../benchmarks/median.riscv -verbose -opt
+
+spike-median: $(OUT_RUNELF)
+	spike --isa=rv32im ../benchmarks/median.riscv
+
+run-prime: $(OUT_RUNELF)
+	./$(OUT_RUNELF)  ../benchmarks/prime.riscv -verbose -opt
+
+spike-prime: $(OUT_RUNELF)
+	spike --isa=rv32im ../benchmarks/prime.riscv
+
 # Clean target
 clean:
 	rm -f $(OUT_SIMPLE) $(OUT_RUNELF)
