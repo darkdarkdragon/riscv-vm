@@ -97,13 +97,29 @@ int riscv_vm_run_optimized_1(uint8_t *registers, uint8_t *program,
 }
 
 #if USE_ZMM_REGISTERS
-#define GET_FROM_REG(regnum)  ({switch (regnum) { \
+#define GET_FROM_REG(dest, regnum)                                             \
+  ({                                                                           \
+    switch (regnum) {                                                          \
+    case 0:                                                                    \
+      asm volatile("vmovd %%zmm0, %0" : "=r"(dest));                           \
+      break;                                                                   \
+    }                                                                          \
+  })
 
-})
-
+#define SET_TO_REG(regnum, val)                                                \
+  {                                                                            \
+    {                                                                          \
+      uint32 __temp = val;                                                     \
+      switch (regnum) {                                                        \
+      case 0:                                                                  \
+        asm volatile("vmovd %0, %%zmm0" : : "r"(__temp));                      \
+        break;                                                                 \
+      }                                                                        \
+    }                                                                          \
+  }
 
 #else
-#define GET_FROM_REG(regnum) (registers[regnum])
+#define GET_FROM_REG(dest, regnum) (dest = registers[regnum])
 #define SET_TO_REG(regnum, val) (registers[regnum] = val)
 
 #endif
@@ -219,7 +235,11 @@ static inline int op_load(uint32_t *registers, uint8_t *wmem,
   if (rd == 0) {
     return 0;
   }
-  uint32_t addr = GET_FROM_REG(GET_RS1(instruction)) + GET_IMM_I(instruction);
+  // uint32_t addr = GET_FROM_REG(GET_RS1(instruction)) +
+  // GET_IMM_I(instruction);
+  uint32_t addr;
+  GET_FROM_REG(addr, GET_RS1(instruction));
+  addr += GET_IMM_I(instruction);
 #if LOG_TRACE
   printf("op_load addr 0x%x imm %d\n", addr, GET_IMM_I(instruction));
 #endif
@@ -294,7 +314,9 @@ static inline void op_int_imm_op(uint32_t *registers, uint32_t instruction) {
   uint8_t shift;
   const uint8_t rs1 = GET_RS1(instruction);
   int32_t immi = GET_IMM_I(instruction);
-  uint32_t v1 = GET_FROM_REG(rs1);
+  // uint32_t v1 = GET_FROM_REG(rs1);
+  uint32_t v1;
+  GET_FROM_REG(v1, rs1);
   switch (GET_FUNCT3(instruction)) {
   case 0: // addi
     SET_TO_REG(rd, v1 + immi);
@@ -345,8 +367,14 @@ static inline void op_auipc(uint32_t *registers, uint32_t instruction,
 static inline int op_store(uint32_t *registers, uint8_t *wmem,
                            uint32_t instruction, uint32_t pc, int *exit_code) {
   const uint8_t funct3 = GET_FUNCT3(instruction);
-  const uint32_t v2 = GET_FROM_REG(GET_RS2(instruction));
-  uint32_t addr = GET_FROM_REG(GET_RS1(instruction)) + GET_IMM_S(instruction);
+  // const uint32_t v2 = GET_FROM_REG(GET_RS2(instruction));
+  // uint32_t addr = GET_FROM_REG(GET_RS1(instruction)) +
+  // GET_IMM_S(instruction);
+  uint32_t v2;
+  GET_FROM_REG(v2, GET_RS2(instruction));
+  uint32_t addr;
+  GET_FROM_REG(addr, GET_RS1(instruction));
+  addr += GET_IMM_S(instruction);
 #if LOG_TRACE
   printf("op_store addr 0x%x imm %d\n", addr, GET_IMM_S(instruction));
 #endif
@@ -453,8 +481,12 @@ static inline void op_int_op(uint32_t *registers, uint32_t instruction) {
   }
   const uint8_t funct3 = GET_FUNCT3(instruction);
   const uint8_t funct7 = GET_FUNCT7(instruction);
-  const uint32_t v1 = GET_FROM_REG(GET_RS1(instruction));
-  const uint32_t v2 = GET_FROM_REG(GET_RS2(instruction));
+  // const uint32_t v1 = GET_FROM_REG(GET_RS1(instruction));
+  // const uint32_t v2 = GET_FROM_REG(GET_RS2(instruction));
+  uint32_t v1;
+  GET_FROM_REG(v1, GET_RS1(instruction));
+  uint32_t v2;
+  GET_FROM_REG(v2, GET_RS2(instruction));
   if (funct7 == 1) { // M extension
     switch (funct3) {
     case 0: // mul
@@ -566,8 +598,12 @@ static inline void op_lui(uint32_t *registers, uint32_t instruction) {
 
 static inline uint8_t op_branch(uint32_t *registers, uint32_t instruction,
                                 uint32_t *pc, int *exit_code) {
-  const uint32_t v1 = GET_FROM_REG(GET_RS1(instruction));
-  const uint32_t v2 = GET_FROM_REG(GET_RS2(instruction));
+  // const uint32_t v1 = GET_FROM_REG(GET_RS1(instruction));
+  // const uint32_t v2 = GET_FROM_REG(GET_RS2(instruction));
+  uint32_t v1;
+  GET_FROM_REG(v1, GET_RS1(instruction));
+  uint32_t v2;
+  GET_FROM_REG(v2, GET_RS2(instruction));
 
   const uint32_t imm =
       (instruction & 0x80000000) | ((instruction & (1 << 7)) << 23) |
@@ -619,9 +655,13 @@ static inline void op_jalr(uint32_t *registers, uint32_t instruction,
                            uint32_t *pc, int *exit_code) {
   const uint8_t rd = GET_RD(instruction);
 
-  const uint32_t addr =
-      (GET_FROM_REG(GET_RS1(instruction)) + GET_IMM_I(instruction)) &
-      0xFFFFFFFE;
+  // const uint32_t addr =
+  //     (GET_FROM_REG(GET_RS1(instruction)) + GET_IMM_I(instruction)) &
+  //     0xFFFFFFFE;
+  uint32_t addr;
+  GET_FROM_REG(addr, GET_RS1(instruction));
+  addr += GET_IMM_I(instruction);
+  addr &= 0xFFFFFFFE;
 
   if (rd) {
     SET_TO_REG(rd, *pc + 4);
@@ -664,8 +704,12 @@ static inline int op_ecall(uint32_t *registers,
                            uint32_t instruction __attribute__((unused)),
                            int *ext_exit_code) {
   // uint32_t gp = registers[3];
-  uint32_t a0 = GET_FROM_REG(10); // argument
-  uint32_t a7 = GET_FROM_REG(17); // function
+  // uint32_t a0 = GET_FROM_REG(10); // argument
+  // uint32_t a7 = GET_FROM_REG(17); // function
+  uint32_t a0;
+  GET_FROM_REG(a0, 10); // argument
+  uint32_t a7;
+  GET_FROM_REG(a7, 17); // function
   uint8_t is_test;
   uint32_t exit_code;
   switch (a7) {
