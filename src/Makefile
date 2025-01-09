@@ -69,12 +69,18 @@ run-simple: $(OUT_SIMPLE)
 run-runelf: $(OUT_RUNELF)
 #	./$(OUT_RUNELF) towers070.riscv -verbose -opt
 #	./$(OUT_RUNELF) towers028.riscv -verbose -opt
-	./$(OUT_RUNELF) median1m.riscv -verbose -opt
+	./$(OUT_RUNELF) median1m.riscv -verbose 
 #	 ./$(OUT_RUNELF) rv32ui-p-lh
 #	 ./$(OUT_RUNELF) dhrystone.riscv -opt
 #	 ./$(OUT_RUNELF) 	 qsort.riscv
 #	 ./$(OUT_RUNELF) memcpy.riscv
 #	 ./$(OUT_RUNELF) multiply.riscv
+
+run-towers: $(OUT_RUNELF)
+	time ./$(OUT_RUNELF) towers028.riscv -verbose -opt
+
+spike-towers: $(OUT_RUNELF)
+	time spike --isa=rv32gcv towers028.riscv
 
 # Clean target
 clean:
