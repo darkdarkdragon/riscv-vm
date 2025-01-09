@@ -3,8 +3,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cycle-counter.h"
 #include "riscv-vm-optimized-1.h"
+
+#if USE_ZMM_REGISTERS
+#include <immintrin.h>
+#endif
+
+#include "cycle-counter.h"
 
 #define SYS_write 64
 #define INT_MIN_HEX 0x80000000
@@ -90,6 +95,18 @@ int riscv_vm_run_optimized_1(uint8_t *registers, uint8_t *program,
   free(wmem);
   return res;
 }
+
+#if USE_ZMM_REGISTERS
+#define GET_FROM_REG(regnum)  ({switch (regnum) { \
+
+})
+
+
+#else
+#define GET_FROM_REG(regnum) (registers[regnum])
+#define SET_TO_REG(regnum, val) (registers[regnum] = val)
+
+#endif
 
 #define GET_RD(inst) ((inst) >> 7) & 0x1F
 #define GET_RS1(inst) ((inst) >> 15) & 0x1F
@@ -202,7 +219,7 @@ static inline int op_load(uint32_t *registers, uint8_t *wmem,
   if (rd == 0) {
     return 0;
   }
-  uint32_t addr = registers[GET_RS1(instruction)] + GET_IMM_I(instruction);
+  uint32_t addr = GET_FROM_REG(GET_RS1(instruction)) + GET_IMM_I(instruction);
 #if LOG_TRACE
   printf("op_load addr 0x%x imm %d\n", addr, GET_IMM_I(instruction));
 #endif
@@ -220,7 +237,7 @@ static inline int op_load(uint32_t *registers, uint8_t *wmem,
   }
   switch (GET_FUNCT3(instruction)) {
   case 0: // lb
-    registers[rd] = (int8_t)wmem[addr];
+    SET_TO_REG(rd, (int8_t)wmem[addr]);
     break;
   case 1: // lh
 #if DISALLOW_MISALIGNED
@@ -232,7 +249,7 @@ static inline int op_load(uint32_t *registers, uint8_t *wmem,
       return ERR_MISALIGNED_MEMORY_ACCESS;
     }
 #endif
-    registers[rd] = *(int16_t *)(wmem + addr);
+    SET_TO_REG(rd, *(int16_t *)(wmem + addr));
     break;
   case 2: // lw
 #if DISALLOW_MISALIGNED
@@ -245,10 +262,10 @@ static inline int op_load(uint32_t *registers, uint8_t *wmem,
       return ERR_MISALIGNED_MEMORY_ACCESS;
     }
 #endif
-    registers[rd] = *(uint32_t *)(wmem + addr);
+    SET_TO_REG(rd, *(uint32_t *)(wmem + addr));
     break;
   case 4: // lbu
-    registers[rd] = wmem[addr];
+    SET_TO_REG(rd, wmem[addr]);
     break;
   case 5: // lhu
 #if DISALLOW_MISALIGNED
@@ -261,7 +278,7 @@ static inline int op_load(uint32_t *registers, uint8_t *wmem,
       return ERR_MISALIGNED_MEMORY_ACCESS;
     }
 #endif
-    registers[rd] = *(uint16_t *)(wmem + addr);
+    SET_TO_REG(rd, *(uint16_t *)(wmem + addr));
     break;
   default:
     break;
@@ -277,38 +294,38 @@ static inline void op_int_imm_op(uint32_t *registers, uint32_t instruction) {
   uint8_t shift;
   const uint8_t rs1 = GET_RS1(instruction);
   int32_t immi = GET_IMM_I(instruction);
-  uint32_t v1 = registers[rs1];
+  uint32_t v1 = GET_FROM_REG(rs1);
   switch (GET_FUNCT3(instruction)) {
   case 0: // addi
-    registers[rd] = v1 + immi;
+    SET_TO_REG(rd, v1 + immi);
     break;
   case 2: // slti
-    registers[rd] = (int32_t)v1 < immi ? 1 : 0;
+    SET_TO_REG(rd, (int32_t)v1 < immi ? 1 : 0);
     break;
   case 3: // sltiu
-    registers[rd] = v1 < ((uint32_t)immi) ? 1 : 0;
+    SET_TO_REG(rd, v1 < ((uint32_t)immi) ? 1 : 0);
     break;
   case 4: // xori
-    registers[rd] = v1 ^ immi;
+    SET_TO_REG(rd, v1 ^ immi);
     break;
   case 6: // ori
-    registers[rd] = v1 | immi;
+    SET_TO_REG(rd, v1 | immi);
     break;
   case 7: // andi
-    registers[rd] = v1 & immi;
+    SET_TO_REG(rd, v1 & immi);
     break;
   case 1: // slli
     shift = (instruction >> 20) & 0x1f;
-    registers[rd] = v1 << shift;
+    SET_TO_REG(rd, v1 << shift);
     break;
   case 5: // srli and srai
     shift = (instruction >> 20) & 0x1f;
     if ((instruction >> 30) & 1) {
       // srai
-      registers[rd] = (int32_t)v1 >> immi;
+      SET_TO_REG(rd, (int32_t)v1 >> immi);
     } else {
       // srli
-      registers[rd] = v1 >> immi;
+      SET_TO_REG(rd, v1 >> immi);
     }
     break;
   default:
@@ -322,14 +339,14 @@ static inline void op_auipc(uint32_t *registers, uint32_t instruction,
   if (rd == 0) {
     return;
   }
-  registers[rd] = pc + GET_IMM_U(instruction);
+  SET_TO_REG(rd, pc + GET_IMM_U(instruction));
 }
 
 static inline int op_store(uint32_t *registers, uint8_t *wmem,
                            uint32_t instruction, uint32_t pc, int *exit_code) {
   const uint8_t funct3 = GET_FUNCT3(instruction);
-  const uint32_t v2 = registers[GET_RS2(instruction)];
-  uint32_t addr = registers[GET_RS1(instruction)] + GET_IMM_S(instruction);
+  const uint32_t v2 = GET_FROM_REG(GET_RS2(instruction));
+  uint32_t addr = GET_FROM_REG(GET_RS1(instruction)) + GET_IMM_S(instruction);
 #if LOG_TRACE
   printf("op_store addr 0x%x imm %d\n", addr, GET_IMM_S(instruction));
 #endif
@@ -436,62 +453,62 @@ static inline void op_int_op(uint32_t *registers, uint32_t instruction) {
   }
   const uint8_t funct3 = GET_FUNCT3(instruction);
   const uint8_t funct7 = GET_FUNCT7(instruction);
-  const uint32_t v1 = registers[GET_RS1(instruction)];
-  const uint32_t v2 = registers[GET_RS2(instruction)];
+  const uint32_t v1 = GET_FROM_REG(GET_RS1(instruction));
+  const uint32_t v2 = GET_FROM_REG(GET_RS2(instruction));
   if (funct7 == 1) { // M extension
     switch (funct3) {
     case 0: // mul
-      registers[rd] = (int32_t)v1 * (int32_t)v2;
+      SET_TO_REG(rd, (int32_t)v1 * (int32_t)v2);
       break;
     case 1: // mulh
-      registers[rd] = ((int64_t)(int32_t)v1 * (int64_t)(int32_t)v2) >> 32;
+      SET_TO_REG(rd, ((int64_t)(int32_t)v1 * (int64_t)(int32_t)v2) >> 32);
       break;
     case 2: // mulhsu
-      registers[rd] = ((uint64_t)((int64_t)(int32_t)v1 * (uint64_t)v2)) >> 32;
+      SET_TO_REG(rd, ((uint64_t)((int64_t)(int32_t)v1 * (uint64_t)v2)) >> 32);
       break;
     case 3: // mulhu
-      registers[rd] = ((uint64_t)v1 * (uint64_t)v2) >> 32;
+      SET_TO_REG(rd, ((uint64_t)v1 * (uint64_t)v2) >> 32);
       break;
     case 4: // div
     {
       if (v2 == 0) {
-        registers[rd] = 0xFFFFFFFF;
+        SET_TO_REG(rd, 0xFFFFFFFF);
       } else if (v1 == INT_MIN_HEX && (int32_t)v2 == -1) {
         // integer overflow
-        registers[rd] = v1;
+        SET_TO_REG(rd, v1);
       } else {
-        registers[rd] = (int32_t)v1 / (int32_t)v2;
+        SET_TO_REG(rd, (int32_t)v1 / (int32_t)v2);
       }
       break;
     }
     case 5: // divu
       if (v2 == 0) {
-        registers[rd] = 0xFFFFFFFF;
+        SET_TO_REG(rd, 0xFFFFFFFF);
       } else {
-        registers[rd] = v1 / v2;
+        SET_TO_REG(rd, v1 / v2);
       }
       break;
     case 6: // rem
     {
       if (v2 == 0) {
-        registers[rd] = v1;
+        SET_TO_REG(rd, v1);
       } else if (v1 == INT_MIN_HEX && (int32_t)v2 == -1) {
         // integer overflow
-        registers[rd] = 0;
+        SET_TO_REG(rd, 0);
       } else {
-        registers[rd] = (int32_t)v1 % (int32_t)v2;
+        SET_TO_REG(rd, (int32_t)v1 % (int32_t)v2);
       }
       break;
     }
     case 7: // remu
     {
       if (v2 == 0) {
-        registers[rd] = v1;
+        SET_TO_REG(rd, v1);
         // } else if (v1 == INT_MIN_HEX && ()v2 == -1) {
         //   // integer overflow
         //   registers[rd] = 0;
       } else {
-        registers[rd] = v1 % v2;
+        SET_TO_REG(rd, v1 % v2);
       }
       break;
     }
@@ -502,37 +519,37 @@ static inline void op_int_op(uint32_t *registers, uint32_t instruction) {
     switch (funct3) {
     case 0: // add/sub
       if (funct7 == 0) {
-        registers[rd] = v1 + v2;
+        SET_TO_REG(rd, v1 + v2);
       } else {
-        registers[rd] = v1 - v2;
+        SET_TO_REG(rd, v1 - v2);
       }
       break;
     case 1: // sll
-      registers[rd] = v1 << (v2 & 0x1F);
+      SET_TO_REG(rd, v1 << (v2 & 0x1F));
       break;
     case 2: // slt
-      registers[rd] = (int32_t)v1 < (int32_t)v2 ? 1 : 0;
+      SET_TO_REG(rd, (int32_t)v1 < (int32_t)v2 ? 1 : 0);
       break;
     case 3: // sltu
-      registers[rd] = v1 < v2 ? 1 : 0;
+      SET_TO_REG(rd, v1 < v2 ? 1 : 0);
       break;
     case 4: // xor
-      registers[rd] = v1 ^ v2;
+      SET_TO_REG(rd, v1 ^ v2);
       break;
     case 5: // srl and sra
       if (funct7 == 0) {
         // srl
-        registers[rd] = v1 >> (v2 & 0x1F);
+        SET_TO_REG(rd, v1 >> (v2 & 0x1F));
       } else if (funct7 == 32) {
         // sra
-        registers[rd] = ((int32_t)v1) >> (v2 & 0x1F);
+        SET_TO_REG(rd, ((int32_t)v1) >> (v2 & 0x1F));
       }
       break;
     case 6: // or
-      registers[rd] = v1 | v2;
+      SET_TO_REG(rd, v1 | v2);
       break;
     case 7: // and
-      registers[rd] = v1 & v2;
+      SET_TO_REG(rd, v1 & v2);
       break;
     default:
       break;
@@ -543,14 +560,14 @@ static inline void op_int_op(uint32_t *registers, uint32_t instruction) {
 static inline void op_lui(uint32_t *registers, uint32_t instruction) {
   const uint8_t rd = GET_RD(instruction);
   if (rd) {
-    registers[rd] = GET_IMM_U(instruction);
+    SET_TO_REG(rd, GET_IMM_U(instruction));
   }
 }
 
 static inline uint8_t op_branch(uint32_t *registers, uint32_t instruction,
                                 uint32_t *pc, int *exit_code) {
-  const uint32_t v1 = registers[GET_RS1(instruction)];
-  const uint32_t v2 = registers[GET_RS2(instruction)];
+  const uint32_t v1 = GET_FROM_REG(GET_RS1(instruction));
+  const uint32_t v2 = GET_FROM_REG(GET_RS2(instruction));
 
   const uint32_t imm =
       (instruction & 0x80000000) | ((instruction & (1 << 7)) << 23) |
@@ -603,10 +620,11 @@ static inline void op_jalr(uint32_t *registers, uint32_t instruction,
   const uint8_t rd = GET_RD(instruction);
 
   const uint32_t addr =
-      (registers[GET_RS1(instruction)] + GET_IMM_I(instruction)) & 0xFFFFFFFE;
+      (GET_FROM_REG(GET_RS1(instruction)) + GET_IMM_I(instruction)) &
+      0xFFFFFFFE;
 
   if (rd) {
-    registers[rd] = *pc + 4;
+    SET_TO_REG(rd, *pc + 4);
   }
   if (addr & 0x3) {
 #if USE_PRINT
@@ -629,7 +647,7 @@ static inline void op_jal(uint32_t *registers, uint32_t instruction,
   int32_t immi = ((int32_t)imm) >> 11;
 
   if (rd) {
-    registers[rd] = *pc + 4;
+    SET_TO_REG(rd, *pc + 4);
   }
   if (immi & 0x3) {
 #if USE_PRINT
@@ -646,8 +664,8 @@ static inline int op_ecall(uint32_t *registers,
                            uint32_t instruction __attribute__((unused)),
                            int *ext_exit_code) {
   // uint32_t gp = registers[3];
-  uint32_t a0 = registers[10]; // argument
-  uint32_t a7 = registers[17]; // function
+  uint32_t a0 = GET_FROM_REG(10); // argument
+  uint32_t a7 = GET_FROM_REG(17); // function
   uint8_t is_test;
   uint32_t exit_code;
   switch (a7) {
@@ -736,31 +754,31 @@ static inline int op_system(uint32_t *registers, uint32_t instruction,
     case 0xF14: // mhartid (Hardware thread ID.)
     {
       if (rd) {
-        registers[rd] = 0;
+        SET_TO_REG(rd, 0);
       }
     } break;
     case 0x300: // mstatus (Machine status register.)
     {
       if (rd) {
-        registers[rd] = 0;
+        SET_TO_REG(rd, 0);
       }
     } break;
     case 0x305: // mtvec (Machine trap-handler base address.)
     {
       if (rd) {
-        registers[rd] = 0;
+        SET_TO_REG(rd, 0);
       }
     } break;
     case 0xb00: // mcycle (Machine cycle counter.)
     {
       if (rd) {
-        registers[rd] = get_cycles();
+        SET_TO_REG(rd, get_cycles());
       }
     } break;
     case 0xb02: // minstret (Machine instructions-retired counter.)
     {
       if (rd) {
-        registers[rd] = mcycle_val;
+        SET_TO_REG(rd, mcycle_val);
       }
     } break;
     default:

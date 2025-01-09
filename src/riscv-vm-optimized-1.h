@@ -9,6 +9,7 @@
 #define EMULATE_UART_OUT 1
 // used by benchmarks in https://github.com/riscv-software-src/riscv-tests
 #define USE_TOHOST_SYSCALL 1
+#define USE_ZMM_REGISTERS 0
 
 
 /**
