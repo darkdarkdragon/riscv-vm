@@ -337,8 +337,8 @@ void run_elf32(void *file_data) {
 int run_elf32v2(void *file_data, int verbose, int use_optimized) {
   Elf32_Ehdr *ehdr = (Elf32_Ehdr *)file_data;
   Elf32_Phdr *phdr = (Elf32_Phdr *)((char *)file_data + ehdr->e_phoff);
-  Elf32_Shdr *shdr = (Elf32_Shdr *)((char *)file_data + ehdr->e_shoff);
-  char *strtab = (char *)file_data + shdr[ehdr->e_shstrndx].sh_offset;
+  // Elf32_Shdr *shdr = (Elf32_Shdr *)((char *)file_data + ehdr->e_shoff);
+  // char *strtab = (char *)file_data + shdr[ehdr->e_shstrndx].sh_offset;
   uint8_t *text = 0;
   uint32_t text_len = 0;
   if (verbose) {

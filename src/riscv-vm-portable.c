@@ -79,8 +79,8 @@ static int riscv_vm_main_loop(uint8_t *wmem, uint32_t program_len) {
   uint8_t opcode = 0;
   uint32_t instruction = 0;
   printf("running instructions:\n");
-  uint8_t going = 0;
-  uint32_t executed = 0;
+  // uint8_t going = 0;
+  // uint32_t executed = 0;
 
   for (; pcp < program_end;) {
     // if (++executed > 10000) {
@@ -224,7 +224,7 @@ void op_store(uint8_t *wmem, uint32_t instruction, uint32_t pc) {
     }
     from_virt = *(uint32_t *)(wmem + REG_MEM_SIZE + reg[rs2]);
     if (from_virt == SYS_write) {
-      uint32_t a0 = *(uint32_t *)(wmem + REG_MEM_SIZE + reg[rs2] + 8);
+      // uint32_t a0 = *(uint32_t *)(wmem + REG_MEM_SIZE + reg[rs2] + 8);
       uint32_t str_ptr = *(uint32_t *)(wmem + REG_MEM_SIZE + reg[rs2] + 16);
       uint32_t str_len = *(uint32_t *)(wmem + REG_MEM_SIZE + reg[rs2] + 24);
       if (LOG_TRACE) {
@@ -233,7 +233,7 @@ void op_store(uint8_t *wmem, uint32_t instruction, uint32_t pc) {
                str_ptr, str_len);
       }
       // printf("OUT:");
-      for (int i = 0; i < str_len; i++) {
+      for (uint32_t i = 0; i < str_len; i++) {
         printf("%c", wmem[REG_MEM_SIZE + str_ptr + i]);
       }
     } else {
@@ -290,9 +290,10 @@ void op_load(uint8_t *wmem, uint32_t instruction, uint32_t pc) {
     break;
   case 2: // lw
     if (addr & 3) {
-      fprintf(stderr, "misaligned load at pc 0x%X (addr 0x%0X) (instruction 0x%X)\n",
+      fprintf(stderr,
+              "misaligned load at pc 0x%X (addr 0x%0X) (instruction 0x%X)\n",
               pc, addr, instruction);
-              exit(22);
+      exit(22);
     }
     reg[rd] = *(uint32_t *)(wmem + REG_MEM_SIZE + addr);
     break;
@@ -378,7 +379,7 @@ void op_int_op(uint8_t *wmem, uint32_t instruction) {
       uint32_t v2 = reg[rs2];
       if (v2 == 0) {
         reg[rd] = v1;
-      } else if ((int32_t)v1 == -2147483648 && v2 == -1) {
+      } else if ((int32_t)v1 == -2147483648 && (int32_t)v2 == -1) {
         // integer overflow
         reg[rd] = 0;
       } else {
@@ -546,7 +547,6 @@ void op_jalr(uint8_t *wmem, uint32_t instruction, uint8_t **pcp, uint32_t pc) {
   uint32_t *reg = (uint32_t *)wmem;
   const uint32_t next_pc = pc + 4;
 
-  const uint8_t funct3 = (instruction >> 12) & 0x7;
   const uint8_t rs1 = (instruction >> 15) & 0x1F;
   const uint8_t rd = (instruction >> 7) & 0x1F;
   const uint32_t imm = (instruction & 0xFFF00000);
@@ -619,9 +619,9 @@ uint8_t op_branch(uint8_t *wmem, uint32_t instruction, uint8_t **pcp) {
   return is_taken;
 }
 
-void op_ecall(uint8_t *wmem, uint32_t instruction) {
+void op_ecall(uint8_t *wmem, uint32_t instruction __attribute__((unused))) {
   uint32_t *reg = (uint32_t *)wmem;
-  uint32_t gp = reg[3];
+  // uint32_t gp = reg[3];
   uint32_t a0 = reg[10]; // argument
   uint32_t a7 = reg[17]; // function
   uint8_t is_test;
@@ -654,7 +654,9 @@ void op_ecall(uint8_t *wmem, uint32_t instruction) {
   printf("ecall\n");
 }
 
-void op_ebreak(uint32_t instruction) { printf("ebreak\n"); }
+void op_ebreak(uint32_t instruction __attribute__((unused))) {
+  printf("ebreak\n");
+}
 
 void op_system(uint8_t *wmem, uint32_t instruction) {
   const uint8_t funct3 = (instruction >> 12) & 0x7;

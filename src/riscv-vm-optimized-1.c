@@ -34,10 +34,12 @@ static const uint32_t tohost = 0x1000;
 static const uint32_t fromhost = 0x1040;
 
 static void dump_registers(uint8_t *registers);
+#if LOG_TRACE
 static void dbg_dump_registers_short(uint32_t *reg);
+#endif
 
 int riscv_vm_main_loop(uint8_t *initial_registers, uint8_t *wmem,
-                       uint32_t program_len, uint32_t *pcp_out);
+                       uint32_t *pcp_out);
 
 static uint64_t mcycle_val = 0;
 
@@ -53,7 +55,7 @@ int riscv_vm_run_optimized_1(uint8_t *registers, uint8_t *program,
     fprintf(stderr,
             "Program too long for memory, program size %d memory size %zu\n",
             program_len, work_mem_size);
-            #endif
+#endif
     return ERR_OUT_OF_MEM;
   }
   init_counter();
@@ -80,7 +82,7 @@ int riscv_vm_run_optimized_1(uint8_t *registers, uint8_t *program,
     memset(registers, 0, REG_MEM_SIZE);
   }
   dump_registers(registers);
-  int res = riscv_vm_main_loop(registers, wmem, program_len, &pcp);
+  int res = riscv_vm_main_loop(registers, wmem, &pcp);
   dump_registers(registers);
 #if USE_PRINT
   printf("Final PC: %04X\n", pcp);
@@ -125,7 +127,7 @@ static inline int op_system(uint32_t *registers, uint32_t instruction,
   return ec;
 
 int riscv_vm_main_loop(uint8_t *initial_registers, uint8_t *wmem,
-                       uint32_t program_len, uint32_t *pcp_out) {
+                       uint32_t *pcp_out) {
   uint32_t registers[32];
   uint8_t *program = wmem;
   uint32_t pc = 0;
@@ -207,7 +209,7 @@ static inline int op_load(uint32_t *registers, uint8_t *wmem,
   // hack to account for code that uses absoulte addresses and start
   // virtual memory from 0x80000000
   addr &= 0x7FFFFFFF;
-  if ((addr) >= work_mem_size) {
+  if (__builtin_expect(addr >= work_mem_size, 0)) {
 #if USE_PRINT
     fprintf(
         stderr,
@@ -354,7 +356,7 @@ static inline int op_store(uint32_t *registers, uint8_t *wmem,
   // virtual memory from 0x80000000
   addr &= 0x7FFFFFFF;
 
-  if ((addr) >= work_mem_size) {
+  if (__builtin_expect(addr >= work_mem_size, 0)) {
 #if USE_PRINT
     fprintf(stderr,
             "store went beyond allocated memory pc %X (addr %0X) (instruction "
@@ -375,10 +377,10 @@ static inline int op_store(uint32_t *registers, uint8_t *wmem,
     }
     from_virt = *(uint32_t *)(wmem + v2);
     if (from_virt == SYS_write) {
-      uint32_t a0 = *(uint32_t *)(wmem + v2 + 8);
+      // uint32_t a0 = *(uint32_t *)(wmem + v2 + 8);
       uint32_t str_ptr = *(uint32_t *)(wmem + v2 + 16);
       uint32_t str_len = *(uint32_t *)(wmem + v2 + 24);
-      for (int i = 0; i < str_len; i++) {
+      for (uint32_t i = 0; i < str_len; i++) {
         printf("%c", wmem[str_ptr + i]);
       }
     } else {
@@ -640,9 +642,10 @@ static inline void op_jal(uint32_t *registers, uint32_t instruction,
   *pc += immi;
 }
 
-static inline int op_ecall(uint32_t *registers, uint32_t instruction,
+static inline int op_ecall(uint32_t *registers,
+                           uint32_t instruction __attribute__((unused)),
                            int *ext_exit_code) {
-  uint32_t gp = registers[3];
+  // uint32_t gp = registers[3];
   uint32_t a0 = registers[10]; // argument
   uint32_t a7 = registers[17]; // function
   uint8_t is_test;
@@ -713,7 +716,7 @@ static inline int op_system(uint32_t *registers, uint32_t instruction,
     return 0;
   }
   const uint8_t rd = GET_RD(instruction);
-  const uint8_t rs1 = GET_RS1(instruction);
+  // const uint8_t rs1 = GET_RS1(instruction);
   const uint32_t csr = (instruction >> 20) & 0xFFF;
 #if USE_PRINT && LOG_TRACE
   printf("rd %02d rs1 %02d csr %03X\n", rd, rs1, csr);
@@ -794,6 +797,7 @@ static void dump_registers(uint8_t *registers) {
 #endif
 }
 
+#if LOG_TRACE
 void dbg_dump_registers_short(uint32_t *reg) {
   for (int i = 0; i < 32; i++) {
     uint32_t val = reg[i];
@@ -803,3 +807,4 @@ void dbg_dump_registers_short(uint32_t *reg) {
   }
   printf("\n");
 }
+#endif
