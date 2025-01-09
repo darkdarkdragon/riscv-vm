@@ -77,10 +77,10 @@ run-runelf: $(OUT_RUNELF)
 #	 ./$(OUT_RUNELF) multiply.riscv
 
 run-towers: $(OUT_RUNELF)
-	./$(OUT_RUNELF) towers028.riscv -verbose -opt
+	./$(OUT_RUNELF) ../benchmarks/towers.riscv -verbose -opt
 
 spike-towers: $(OUT_RUNELF)
-	spike --isa=rv32gcv towers028.riscv
+	spike --isa=rv32im ../benchmarks/towers.riscv
 
 run-median: $(OUT_RUNELF)
 	./$(OUT_RUNELF)  ../benchmarks/median.riscv -verbose -opt
