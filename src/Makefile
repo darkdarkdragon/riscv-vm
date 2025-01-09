@@ -77,10 +77,10 @@ run-runelf: $(OUT_RUNELF)
 #	 ./$(OUT_RUNELF) multiply.riscv
 
 run-towers: $(OUT_RUNELF)
-	time ./$(OUT_RUNELF) towers028.riscv -verbose -opt
+	./$(OUT_RUNELF) towers028.riscv -verbose -opt
 
 spike-towers: $(OUT_RUNELF)
-	time spike --isa=rv32gcv towers028.riscv
+	spike --isa=rv32gcv towers028.riscv
 
 # Clean target
 clean:
