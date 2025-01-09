@@ -2,14 +2,14 @@
 
 #include <stdint.h>
 
-#define LOG_TRACE 0
-#define LOG_DEBUG 0
+#define LOG_TRACE 1
+#define LOG_DEBUG 1
 #define USE_PRINT 1
 #define DISALLOW_MISALIGNED 0
 #define EMULATE_UART_OUT 1
 // used by benchmarks in https://github.com/riscv-software-src/riscv-tests
 #define USE_TOHOST_SYSCALL 1
-#define USE_ZMM_REGISTERS 1
+#define USE_ZMM_REGISTERS 0
 
 
 /**
