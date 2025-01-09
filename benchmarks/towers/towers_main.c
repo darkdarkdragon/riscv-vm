@@ -222,6 +222,7 @@ int main( int argc, char* argv[] )
 #endif
 
   // Solve it
+  printf("starting towers with %d disks\n", NUM_DISCS);
 
   towers_clear( &towers );
   setStats(1);
