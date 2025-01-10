@@ -3,6 +3,7 @@
 CC = gcc
 
 # Compiler flags
+CFLAGS = -Wall -Wextra -O3 
 #CFLAGS = -Wall -Wextra -O3 -mavx512f
 #CFLAGS = -Wall -Wextra -O3 -mavx512f -march=skylake-avx512  -mno-sse
 #CFLAGS = -Wall -Wextra 
