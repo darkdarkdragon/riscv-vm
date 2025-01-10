@@ -78,17 +78,26 @@ run-runelf: $(OUT_RUNELF)
 #	 ./$(OUT_RUNELF) memcpy.riscv
 #	 ./$(OUT_RUNELF) multiply.riscv
 
+run-towers-port: $(OUT_RUNELF)
+	./$(OUT_RUNELF) ../benchmarks/towers.riscv
+
 run-towers: $(OUT_RUNELF)
 	./$(OUT_RUNELF) ../benchmarks/towers.riscv -verbose -opt
 
 spike-towers: $(OUT_RUNELF)
 	spike --isa=rv32im ../benchmarks/towers.riscv
 
+run-median-port: $(OUT_RUNELF)
+	./$(OUT_RUNELF)  ../benchmarks/median.riscv
+
 run-median: $(OUT_RUNELF)
 	./$(OUT_RUNELF)  ../benchmarks/median.riscv -verbose -opt
 
 spike-median: $(OUT_RUNELF)
 	spike --isa=rv32im ../benchmarks/median.riscv
+
+run-prime-port: $(OUT_RUNELF)
+	./$(OUT_RUNELF)  ../benchmarks/prime.riscv 
 
 run-prime: $(OUT_RUNELF)
 	./$(OUT_RUNELF)  ../benchmarks/prime.riscv -verbose -opt
