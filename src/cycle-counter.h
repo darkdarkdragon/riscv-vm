@@ -9,7 +9,7 @@ static inline uint64_t get_cycles(void) {
     // - RDTSC reads the time stamp counter
     // - _mm_lfence() prevents out-of-order execution
     // - Newer Intel CPUs might need RDTSCP instead of RDTSC for better accuracy
-    _mm_lfence();  // Serializing instruction
+    //_mm_lfence();  // Serializing instruction
     return __rdtsc();
 }
 static inline void init_counter(void) {

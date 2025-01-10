@@ -6,7 +6,7 @@
 #include "riscv-vm-optimized-1.h"
 
 #if USE_ZMM_REGISTERS
-#include <immintrin.h>
+// #include <immintrin.h>
 #endif
 
 #include "cycle-counter.h"
@@ -530,6 +530,9 @@ static inline void op_int_imm_op(uint32_t *registers, uint32_t instruction) {
   */
   uint32_t v1;
   GET_FROM_REG(v1, rs1);
+#if LOG_TRACE
+  printf("op imm funct3=%d rd=%d rs1=%d rs2=%d imms=%d\n", GET_FUNCT3(instruction), rd, GET_RS1(instruction), GET_RS2(instruction));
+#endif
   switch (GET_FUNCT3(instruction)) {
   case 0: // addi
     SET_TO_REG(rd, v1 + immi);
@@ -704,6 +707,9 @@ static inline void op_int_op(uint32_t *registers, uint32_t instruction) {
   GET_FROM_REG(v1, GET_RS1(instruction));
   uint32_t v2;
   GET_FROM_REG(v2, GET_RS2(instruction));
+#if LOG_TRACE
+  printf("int op funct3=%d funct7=%d rd=%d rs1=%d rs2=%d imms=%d\n", funct3, funct7, GET_RS1(instruction), GET_RS2(instruction));
+#endif
   if (funct7 == 1) { // M extension
     switch (funct3) {
     case 0: // mul
@@ -808,6 +814,9 @@ static inline void op_int_op(uint32_t *registers, uint32_t instruction) {
 
 static inline void op_lui(uint32_t *registers, uint32_t instruction) {
   const uint8_t rd = GET_RD(instruction);
+#if LOG_TRACE
+  printf("lui rd=%d imm=%d\n", rd, GET_IMM_U(instruction));
+#endif
   if (rd) {
     SET_TO_REG(rd, GET_IMM_U(instruction));
   }
@@ -851,6 +860,7 @@ static inline uint8_t op_branch(uint32_t *registers, uint32_t instruction,
     break;
   }
 #if LOG_TRACE
+  printf("branch rs1=%d rs2=%d imms=%d is_taken=%d\n", GET_RS1(instruction), GET_RS2(instruction), imms, is_taken);
   printf("PC 0x%0X is_taken %d imms %d instruction 0x%04X\n", *pc, is_taken,
          imms, instruction);
 #endif
