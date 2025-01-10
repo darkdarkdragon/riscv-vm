@@ -8,46 +8,6 @@ CFLAGS = -Wall -Wextra -O3
 #CFLAGS = -Wall -Wextra -O3 -mavx512f -march=skylake-avx512  
 #CFLAGS = -Wall -Wextra -O3 -msse3
 
-# CFLAGS = 
-
-# Target executable name
-# TARGET = simple runelf
-
-# Source files
-# SRCS = simple.c riscv-vm-portable.c runelf.c
-
-# Object files (replace .c with .o in SRCS)
-# OBJS = $(SRCS:.c=.o)
-
-# Source file
-#SRC = simple.c risc-vm-portable.c
-
-# Build the program
-# all: $(TARGET)
-
-# $(TARGET): $(SRC)
-# 	$(CC) -o $(TARGET) $(SRC)
-
-# Rule to build the target
-# $(TARGET): $(OBJS)
-# 	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS)
-
-# Rule to build object files
-# %.o: %.c
-# 	$(CC) $(CFLAGS) -c $< -o $@
-
-# Clean up generated files
-# clean:
-# 	rm -f $(TARGET)
-# Clean rule
-# clean:
-# 	rm -f $(OBJS) $(TARGET)
-
-# Run the program
-# run: $(TARGET)
-# 	./$(TARGET)
-
-# .PHONY: all clean
 
 # Source files
 SRC_SIMPLE=simple.c riscv-vm-portable.c
@@ -71,14 +31,7 @@ run-simple: $(OUT_SIMPLE)
 	./$(OUT_SIMPLE)
 
 run-runelf: $(OUT_RUNELF)
-#	./$(OUT_RUNELF) towers070.riscv -verbose -opt
-#	./$(OUT_RUNELF) towers028.riscv -verbose -opt
 	./$(OUT_RUNELF) median1m.riscv -verbose 
-#	 ./$(OUT_RUNELF) rv32ui-p-lh
-#	 ./$(OUT_RUNELF) dhrystone.riscv -opt
-#	 ./$(OUT_RUNELF) 	 qsort.riscv
-#	 ./$(OUT_RUNELF) memcpy.riscv
-#	 ./$(OUT_RUNELF) multiply.riscv
 
 run-towers: $(OUT_RUNELF)
 	./$(OUT_RUNELF) ../benchmarks/towers.riscv -verbose -opt
@@ -108,5 +61,3 @@ retest: rebuild
 	./$(OUT_RUNELF) rv32ui-p-lui -opt
 
 .PHONY: all clean run-simple run-runelf retest rebuild
-
-
