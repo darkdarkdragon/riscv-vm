@@ -477,10 +477,10 @@ void op_int_imm_op(uint8_t *wmem, uint32_t instruction) {
       shift = (instruction >> 20) & 0x1f;
       if ((instruction >> 30) & 1) {
         // srai
-        reg[rd] = (int32_t)reg[rs1] >> immi;
+        reg[rd] = (int32_t)reg[rs1] >> shift;
       } else {
         // srli
-        reg[rd] = reg[rs1] >> immi;
+        reg[rd] = reg[rs1] >> shift;
       }
       break;
     default:

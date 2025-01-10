@@ -557,10 +557,10 @@ static inline void op_int_imm_op(uint32_t *registers, uint32_t instruction) {
     shift = (instruction >> 20) & 0x1f;
     if ((instruction >> 30) & 1) {
       // srai
-      SET_TO_REG(rd, (int32_t)v1 >> immi);
+      registers[rd] = (int32_t)v1 >> shift;
     } else {
       // srli
-      SET_TO_REG(rd, v1 >> immi);
+      registers[rd] = v1 >> shift;
     }
     break;
   default:

@@ -3,10 +3,11 @@
 CC = gcc
 
 # Compiler flags
-CFLAGS = -Wall -Wextra -O3 
-#CFLAGS = -Wall -Wextra -O3 -mavx512f
+CFLAGS = -Wall -Wextra -O3
 #CFLAGS = -Wall -Wextra -O3 -mavx512f -march=skylake-avx512  -mno-sse
-#CFLAGS = -Wall -Wextra 
+#CFLAGS = -Wall -Wextra -O3 -mavx512f -march=skylake-avx512  
+#CFLAGS = -Wall -Wextra -O3 -msse3
+
 # CFLAGS = 
 
 # Target executable name
@@ -110,5 +111,11 @@ spike-prime: $(OUT_RUNELF)
 clean:
 	rm -f $(OUT_SIMPLE) $(OUT_RUNELF)
 
-.PHONY: all clean run-simple run-runelf
+rebuild: clean all
+
+retest: rebuild
+	./$(OUT_RUNELF) rv32ui-p-lui -opt
+
+.PHONY: all clean run-simple run-runelf retest rebuild
+
 
