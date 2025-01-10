@@ -716,9 +716,9 @@ static inline int op_system(uint32_t *registers, uint32_t instruction,
     return 0;
   }
   const uint8_t rd = GET_RD(instruction);
-  // const uint8_t rs1 = GET_RS1(instruction);
   const uint32_t csr = (instruction >> 20) & 0xFFF;
 #if USE_PRINT && LOG_TRACE
+  const uint8_t rs1 = GET_RS1(instruction);
   printf("rd %02d rs1 %02d csr %03X\n", rd, rs1, csr);
   dbg_dump_registers_short(registers);
   printf("CSR op rd %02d rs1 0x%02d csr 0x%03X funct3 %d\n", rd, rs1, csr,
