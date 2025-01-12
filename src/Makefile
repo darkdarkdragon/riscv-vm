@@ -62,6 +62,9 @@ run-prime-port: $(OUT_RUNELF)
 run-prime: $(OUT_RUNELF)
 	./$(OUT_RUNELF)  ../benchmarks/prime.riscv -verbose -opt2
 
+run-prime1: $(OUT_RUNELF)
+	./$(OUT_RUNELF)  ../benchmarks/prime.riscv -verbose -opt
+
 spike-prime: $(OUT_RUNELF)
 	spike --isa=rv32im ../benchmarks/prime.riscv
 
