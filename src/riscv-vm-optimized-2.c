@@ -3,15 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "riscv-vm-optimized-1.h"
 #include "riscv-vm-common.h"
+#include "riscv-vm-optimized-1.h"
 
 #if USE_ZMM_REGISTERS
 // #include <immintrin.h>
 #endif
 
 #include "cycle-counter.h"
-
 
 // 1 MiB, memory available inside VM
 // static const int VM_MEMORY = 1048576;
@@ -352,6 +351,35 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
     }
   }
 #endif
+  static void *op_table[] = {
+      &&uo,         &&uo,        &&uo, &&op_load,  &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&normal_end, &&uo,        &&uo, &&uo,       &&op_int_imm_op,
+      &&uo,         &&uo,        &&uo, &&op_auipc, &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&op_store,   &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&op_int_op, &&uo, &&uo,       &&uo,
+      &&op_lui,     &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&op_branch,
+      &&uo,         &&uo,        &&uo, &&op_jalr,  &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&op_jal,    &&uo, &&uo,       &&uo,
+      &&op_system,  &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
+      &&uo};
 
   while (res == 0) {
     mcycle_val++;
@@ -361,6 +389,8 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
     dbg_dump_registers_short(registers);
     //  printf("\n");
 #endif
+    goto *op_table[instruction & 0x7F];
+  /*
     switch (instruction & 0x7F) {
     case 0x03:
       // if ((res = op_load(registers, program, instruction, pc))) {
@@ -405,11 +435,20 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
 #endif
       exit_loop(ERR_UNIMPLEMENTED_OPCODE) break;
     }
+    */
   normal_end:;
     pc += 4;
   jump_end:;
   }
   exit_loop(res);
+  {
+  uo:;
+#if USE_PRINT
+    fprintf(stderr, "Unimplemented or invalid opcode 0x%02X at PC 0x%02X\n",
+            instruction & 0x7F, pc);
+#endif
+    exit_loop(ERR_UNIMPLEMENTED_OPCODE);
+  }
 
   {
   op_load:;
@@ -1065,7 +1104,6 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
     goto normal_end;
   }
 }
-
 
 #if LOG_TRACE
 #if USE_ZMM_REGISTERS
