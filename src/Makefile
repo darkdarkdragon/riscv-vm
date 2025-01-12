@@ -6,7 +6,9 @@ CC = gcc
 #CFLAGS = -Wall -Wextra -O3 -mavx512f -march=skylake-avx512  -mno-sse
 #CFLAGS = -Wall -Wextra -O3 -mavx512f -march=skylake-avx512  
 #CFLAGS = -Wall -Wextra -O3 -msse3
-CFLAGS = -Wall -Wextra -O3 -mno-sse
+#CFLAGS = -Wall -Wextra -O3 -mno-sse
+CFLAGS = -Wall -Wextra -O3
+#CFLAGS = 
 
 
 # Source files
@@ -29,6 +31,9 @@ $(OUT_RUNELF): $(SRC_RUNELF)
 # Run targets
 run-simple: $(OUT_SIMPLE)
 	./$(OUT_SIMPLE)
+
+run-mul: clean $(OUT_RUNELF)
+	./$(OUT_RUNELF) ../compiled-tests/rv32um-p-mul -opt
 
 run-runelf: $(OUT_RUNELF)
 	./$(OUT_RUNELF) median1m.riscv -verbose 

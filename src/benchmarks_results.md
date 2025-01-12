@@ -8,6 +8,7 @@ port:
 
 optimized:
 19.30s user 0.05s system 99% cpu 19.471 total
+2.141784 nanosec/inst
 
 AWS t3.micro (Intel AVX-512):
 
@@ -16,6 +17,7 @@ real	1m21.232s
 
 optimized
 real	0m55.086s
+20.495384 nanosec/inst
 
 spike
 real	1m6.967s
@@ -27,6 +29,7 @@ port:
 4.96s user 0.02s system 99% cpu 5.000 total
 optimized:
 4.13s user 0.02s system 99% cpu 4.180 total
+2.724208 nanosec/inst
 
 AWS t3.micro (Intel AVX-512):
 
@@ -35,6 +38,7 @@ real	0m11.631s
 
 optimized
 real	0m8.909s
+15.665575 nanosec/inst
 
 spike
 real	2m4.947s
@@ -47,6 +51,7 @@ port:
 14.51s user 0.04s system 99% cpu 14.647 total
 optimized:
 10.17s user 0.04s system 99% cpu 10.311 total
+2.085813 nanosec/instruction
 
 AWS t3.micro (Intel AVX-512):
 
@@ -55,6 +60,7 @@ real	0m38.966s
 
 optimized
 real	0m27.662s
+14.841253 nanosec/inst
 
 spike
 real	0m30.015s
