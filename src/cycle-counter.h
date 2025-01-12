@@ -4,6 +4,7 @@
 
 #if defined(__x86_64__) || defined(__i386__)
 #include <x86intrin.h>
+#include <time.h>
 
 static struct timespec ts;
 static uint64_t start_time;
