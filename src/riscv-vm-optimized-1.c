@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -346,7 +347,8 @@ static inline int op_system(uint32_t *registers, uint32_t instruction,
   *pcp_out = pc;                                                               \
   duration = get_cycles() - start_time;                                        \
   speed = (double)mcycle_val / ((double)duration / 1e9);                       \
-  printf("system exit mcycle=%llu dur %llu speed is %g ops/sec (%f "           \
+  printf("system exit mcycle=%" PRIu64 " dur %" PRIu64                         \
+         " speed is %g ops/sec (%f "                                           \
          "nanosec/inst)\n",                                                    \
          mcycle_val, duration, speed,                                          \
          ((double)duration / 1.0) / (double)mcycle_val);                       \

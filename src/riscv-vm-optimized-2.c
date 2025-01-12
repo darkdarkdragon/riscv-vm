@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -328,7 +329,8 @@ int riscv_vm_run_optimized_2(uint8_t *registers, uint8_t *program,
   *pcp_out = pc;                                                               \
   duration = get_cycles() - start_time;                                        \
   speed = (double)mcycle_val / ((double)duration / 1e9);                       \
-  printf("system exit mcycle=%llu dur %llu speed is %g ops/sec (%f "           \
+  printf("system exit mcycle=%" PRIu64 " dur %" PRIu64                         \
+         " speed is %g ops/sec (%f "                                           \
          "nanosec/inst)\n",                                                    \
          mcycle_val, duration, speed,                                          \
          ((double)duration / 1.0) / (double)mcycle_val);                       \
