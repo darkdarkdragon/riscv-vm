@@ -48,7 +48,7 @@ int riscv_vm_run_optimized_1(uint8_t *registers, uint8_t *program,
   }
   init_counter();
   start_time = get_cycles();
-  printf("start time %llu\n", start_time);
+  printf("start time %" PRIu64 "\n", start_time);
   uint8_t *wmem = aligned_alloc(alignment, work_mem_size);
   if (wmem == NULL) {
     // Handle allocation failure
