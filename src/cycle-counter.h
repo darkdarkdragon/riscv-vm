@@ -7,7 +7,7 @@
 #include <time.h>
 
 static struct timespec ts;
-static uint64_t start_time;
+static uint64_t __start_time;
 
 static inline uint64_t get_cycles(void) {
   // Notes:
@@ -18,13 +18,13 @@ static inline uint64_t get_cycles(void) {
   //   return __rdtsc();
   clock_gettime(CLOCK_MONOTONIC, &ts);
   uint64_t nanoseconds = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
-  return nanoseconds - start_time;
+  return nanoseconds - __start_time;
 }
 
 static inline void init_counter(void) {
   clock_gettime(CLOCK_MONOTONIC, &ts);
   uint64_t nanoseconds = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
-  start_time = nanoseconds;
+  __start_time = nanoseconds;
 }
 
 #elif defined(__aarch64__)
