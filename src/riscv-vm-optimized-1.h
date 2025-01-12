@@ -22,3 +22,5 @@
 
  */
 int riscv_vm_run_optimized_1(uint8_t *registers, uint8_t *program, uint32_t program_len);
+
+int riscv_vm_run_optimized_2(uint8_t *registers, uint8_t *program, uint32_t program_len);

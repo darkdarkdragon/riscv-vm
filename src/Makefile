@@ -13,7 +13,7 @@ CFLAGS = -Wall -Wextra -O3
 
 # Source files
 SRC_SIMPLE=simple.c riscv-vm-portable.c
-SRC_RUNELF=runelf.c riscv-vm-portable.c riscv-vm-optimized-1.c
+SRC_RUNELF=runelf.c riscv-vm-portable.c riscv-vm-optimized-1.c riscv-vm-optimized-2.c riscv-vm-common.c
 
 # Output executables
 OUT_SIMPLE=simple
@@ -33,7 +33,7 @@ run-simple: $(OUT_SIMPLE)
 	./$(OUT_SIMPLE)
 
 run-mul: clean $(OUT_RUNELF)
-	./$(OUT_RUNELF) ../compiled-tests/rv32um-p-mul -opt
+	./$(OUT_RUNELF) ../compiled-tests/rv32um-p-mul -opt2
 
 run-runelf: $(OUT_RUNELF)
 	./$(OUT_RUNELF) median1m.riscv -verbose 
@@ -42,7 +42,7 @@ run-towers-port: $(OUT_RUNELF)
 	./$(OUT_RUNELF) ../benchmarks/towers.riscv
 
 run-towers: $(OUT_RUNELF)
-	./$(OUT_RUNELF) ../benchmarks/towers.riscv -verbose -opt
+	./$(OUT_RUNELF) ../benchmarks/towers.riscv -verbose -opt2
 
 spike-towers: $(OUT_RUNELF)
 	spike --isa=rv32im ../benchmarks/towers.riscv
@@ -51,7 +51,7 @@ run-median-port: $(OUT_RUNELF)
 	./$(OUT_RUNELF)  ../benchmarks/median.riscv
 
 run-median: $(OUT_RUNELF)
-	./$(OUT_RUNELF)  ../benchmarks/median.riscv -verbose -opt
+	./$(OUT_RUNELF)  ../benchmarks/median.riscv -verbose -opt2
 
 spike-median: $(OUT_RUNELF)
 	spike --isa=rv32im ../benchmarks/median.riscv
@@ -60,7 +60,7 @@ run-prime-port: $(OUT_RUNELF)
 	./$(OUT_RUNELF)  ../benchmarks/prime.riscv 
 
 run-prime: $(OUT_RUNELF)
-	./$(OUT_RUNELF)  ../benchmarks/prime.riscv -verbose -opt
+	./$(OUT_RUNELF)  ../benchmarks/prime.riscv -verbose -opt2
 
 spike-prime: $(OUT_RUNELF)
 	spike --isa=rv32im ../benchmarks/prime.riscv
