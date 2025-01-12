@@ -16,8 +16,13 @@ port:
 real	1m21.232s
 
 optimized
-real	0m55.086s
-20.495384 nanosec/inst
+real	1m3.112s
+8.332461 nanosec/inst
+
+optimized2
+real	0m55.116s
+7.072318 nanosec/inst
+
 
 spike
 real	1m6.967s
@@ -38,7 +43,11 @@ real	0m11.631s
 
 optimized
 real	0m8.909s
-15.665575 nanosec/inst
+6.370830 nanosec/inst
+
+optimized2
+real	0m7.077s
+5.137839 nanosec/inst
 
 spike
 real	2m4.947s
@@ -60,7 +69,11 @@ real	0m38.966s
 
 optimized
 real	0m27.662s
-14.841253 nanosec/inst
+5.920761 nanosec/inst
+
+optimized2
+real	0m23.075s
+5.220222 nanosec/inst
 
 spike
 real	0m30.015s
