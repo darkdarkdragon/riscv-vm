@@ -44,6 +44,9 @@ run-towers-port: $(OUT_RUNELF)
 run-towers: $(OUT_RUNELF)
 	./$(OUT_RUNELF) ../benchmarks/towers.riscv -verbose -opt2
 
+run-towers1: $(OUT_RUNELF)
+	./$(OUT_RUNELF) ../benchmarks/towers.riscv -verbose -opt
+
 spike-towers: $(OUT_RUNELF)
 	spike --isa=rv32im ../benchmarks/towers.riscv
 
@@ -52,6 +55,9 @@ run-median-port: $(OUT_RUNELF)
 
 run-median: $(OUT_RUNELF)
 	./$(OUT_RUNELF)  ../benchmarks/median.riscv -verbose -opt2
+
+run-median1: $(OUT_RUNELF)
+	./$(OUT_RUNELF)  ../benchmarks/median.riscv -verbose -opt
 
 spike-median: $(OUT_RUNELF)
 	spike --isa=rv32im ../benchmarks/median.riscv
