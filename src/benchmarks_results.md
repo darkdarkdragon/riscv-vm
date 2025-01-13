@@ -87,6 +87,15 @@ real	0m30.015s
 
 
 ### prime 4000000
+Mac
+optimized1
+81.12s user
+2.278890 nanosec/inst
+optimized4
+77.78s
+2.174977 nanosec/inst
+4.5% faster than optimized 1
+
 
 
 AWS t3.micro (Intel AVX-512):
@@ -104,3 +113,4 @@ real	2m52.090s
 optimized4
 real	2m52.972s
 4.803885 nanosec/inst
+13% faster than optimized 1

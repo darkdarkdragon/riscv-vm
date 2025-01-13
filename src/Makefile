@@ -70,10 +70,10 @@ run-prime-port: $(OUT_RUNELF)
 	./$(OUT_RUNELF)  ../benchmarks/prime.riscv 
 
 run-prime: $(OUT_RUNELF)
-	./$(OUT_RUNELF)  ../benchmarks/prime.riscv -verbose -opt4
+	./$(OUT_RUNELF)  ../benchmarks/prime4.riscv -verbose -opt4
 
 run-prime1: $(OUT_RUNELF)
-	./$(OUT_RUNELF)  ../benchmarks/prime.riscv -verbose -opt
+	./$(OUT_RUNELF)  ../benchmarks/prime4.riscv -verbose -opt
 
 run-prime2: $(OUT_RUNELF)
 	./$(OUT_RUNELF)  ../benchmarks/prime.riscv -verbose -opt2
