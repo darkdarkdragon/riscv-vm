@@ -5,6 +5,7 @@ CC = gcc
 # Compiler flags
 #CFLAGS = -Wall -Wextra -O3 -mavx512f -march=skylake-avx512  -mno-sse
 #CFLAGS = -Wall -Wextra -O3 -mavx512f -march=skylake-avx512  
+#CFLAGS = -Wall -Wextra -O3 -mavx512f -march=skylake-avx512  
 #CFLAGS = -Wall -Wextra -O3 -msse3
 #CFLAGS = -Wall -Wextra -O3 -mno-sse
 CFLAGS = -Wall -Wextra -O3
@@ -13,7 +14,7 @@ CFLAGS = -Wall -Wextra -O3
 
 # Source files
 SRC_SIMPLE=simple.c riscv-vm-portable.c
-SRC_RUNELF=runelf.c riscv-vm-portable.c riscv-vm-optimized-1.c riscv-vm-optimized-2.c riscv-vm-common.c
+SRC_RUNELF=runelf.c riscv-vm-portable.c riscv-vm-optimized-1.c riscv-vm-optimized-2.c riscv-vm-common.c riscv-vm-optimized-3.c riscv-vm-optimized-4.c
 
 # Output executables
 OUT_SIMPLE=simple
@@ -34,6 +35,9 @@ run-simple: $(OUT_SIMPLE)
 
 run-mul: clean $(OUT_RUNELF)
 	./$(OUT_RUNELF) ../compiled-tests/rv32um-p-mul -opt2
+
+run-div: clean $(OUT_RUNELF)
+	./$(OUT_RUNELF) ../compiled-tests/rv32um-p-div -opt4
 
 run-runelf: $(OUT_RUNELF)
 	./$(OUT_RUNELF) median1m.riscv -verbose 
@@ -66,10 +70,13 @@ run-prime-port: $(OUT_RUNELF)
 	./$(OUT_RUNELF)  ../benchmarks/prime.riscv 
 
 run-prime: $(OUT_RUNELF)
-	./$(OUT_RUNELF)  ../benchmarks/prime.riscv -verbose -opt2
+	./$(OUT_RUNELF)  ../benchmarks/prime.riscv -verbose -opt4
 
 run-prime1: $(OUT_RUNELF)
 	./$(OUT_RUNELF)  ../benchmarks/prime.riscv -verbose -opt
+
+run-prime2: $(OUT_RUNELF)
+	./$(OUT_RUNELF)  ../benchmarks/prime.riscv -verbose -opt2
 
 spike-prime: $(OUT_RUNELF)
 	spike --isa=rv32im ../benchmarks/prime.riscv

@@ -7,10 +7,6 @@
 #include "riscv-vm-common.h"
 #include "riscv-vm-optimized-1.h"
 
-#if USE_ZMM_REGISTERS
-// #include <immintrin.h>
-#endif
-
 #include "cycle-counter.h"
 
 // 1 MiB, memory available inside VM
@@ -23,7 +19,7 @@ static const size_t work_mem_size = VM_MEMORY * 1; // size of memory to allocate
 static void dbg_dump_registers_short(uint32_t *reg);
 #endif
 
-static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
+static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
                                 uint32_t *pcp_out);
 
 static uint64_t mcycle_val = 0;
@@ -31,7 +27,7 @@ static uint64_t start_time = 0;
 static uint64_t duration = 0;
 static double speed = 0;
 
-int riscv_vm_run_optimized_2(uint8_t *registers, uint8_t *program,
+int riscv_vm_run_optimized_4(uint8_t *registers, uint8_t *program,
                              uint32_t program_len) {
 
 #if USE_PRINT
@@ -74,7 +70,7 @@ int riscv_vm_run_optimized_2(uint8_t *registers, uint8_t *program,
 #if PRINT_REGISTERS
   dump_registers(registers);
 #endif
-  int res = riscv_vm_main_loop_2(registers, wmem, &pcp);
+  int res = riscv_vm_main_loop_4(registers, wmem, &pcp);
 #if PRINT_REGISTERS
   dump_registers(registers);
 #endif
@@ -85,232 +81,8 @@ int riscv_vm_run_optimized_2(uint8_t *registers, uint8_t *program,
   return res;
 }
 
-#if USE_ZMM_REGISTERS
-#define GET_FROM_REG(dest, regnum)                                             \
-  ({                                                                           \
-    switch (regnum) {                                                          \
-    case 0:                                                                    \
-      asm volatile("vmovd %%xmm0, %0" : "=r"(dest) : : "%xmm0");               \
-      break;                                                                   \
-    case 1:                                                                    \
-      asm volatile("vmovd %%xmm1, %0" : "=r"(dest) : : "%xmm1");               \
-      break;                                                                   \
-    case 2:                                                                    \
-      asm volatile("vmovd %%xmm2, %0" : "=r"(dest) : : "%xmm2");               \
-      break;                                                                   \
-    case 3:                                                                    \
-      asm volatile("vmovd %%xmm3, %0" : "=r"(dest) : : "%xmm3");               \
-      break;                                                                   \
-    case 4:                                                                    \
-      asm volatile("vmovd %%xmm4, %0" : "=r"(dest) : : "%xmm4");               \
-      break;                                                                   \
-    case 5:                                                                    \
-      asm volatile("vmovd %%xmm5, %0" : "=r"(dest) : : "%xmm5");               \
-      break;                                                                   \
-    case 6:                                                                    \
-      asm volatile("vmovd %%xmm6, %0" : "=r"(dest) : :);                       \
-      break;                                                                   \
-    case 7:                                                                    \
-      asm volatile("vmovd %%xmm7, %0" : "=r"(dest) : :);                       \
-      break;                                                                   \
-    case 8:                                                                    \
-      asm volatile("vmovd %%xmm8, %0" : "=r"(dest) : :);                       \
-      break;                                                                   \
-    case 9:                                                                    \
-      asm volatile("vmovd %%xmm9, %0" : "=r"(dest) : :);                       \
-      break;                                                                   \
-    case 10:                                                                   \
-      asm volatile("vmovd %%xmm10, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 11:                                                                   \
-      asm volatile("vmovd %%xmm11, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 12:                                                                   \
-      asm volatile("vmovd %%xmm12, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 13:                                                                   \
-      asm volatile("vmovd %%xmm13, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 14:                                                                   \
-      asm volatile("vmovd %%xmm14, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 15:                                                                   \
-      asm volatile("vmovd %%xmm15, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 16:                                                                   \
-      asm volatile("vmovd %%xmm16, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 17:                                                                   \
-      asm volatile("vmovd %%xmm17, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 18:                                                                   \
-      asm volatile("vmovd %%xmm18, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 19:                                                                   \
-      asm volatile("vmovd %%xmm19, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 20:                                                                   \
-      asm volatile("vmovd %%xmm20, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 21:                                                                   \
-      asm volatile("vmovd %%xmm21, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 22:                                                                   \
-      asm volatile("vmovd %%xmm22, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 23:                                                                   \
-      asm volatile("vmovd %%xmm23, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 24:                                                                   \
-      asm volatile("vmovd %%xmm24, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 25:                                                                   \
-      asm volatile("vmovd %%xmm25, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 26:                                                                   \
-      asm volatile("vmovd %%xmm26, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 27:                                                                   \
-      asm volatile("vmovd %%xmm27, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 28:                                                                   \
-      asm volatile("vmovd %%xmm28, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 29:                                                                   \
-      asm volatile("vmovd %%xmm29, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 30:                                                                   \
-      asm volatile("vmovd %%xmm30, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    case 31:                                                                   \
-      asm volatile("vmovd %%xmm31, %0" : "=r"(dest) : :);                      \
-      break;                                                                   \
-    }                                                                          \
-  })
-
-#define XSET_TO_REG(regnum, val)                                               \
-  {                                                                            \
-    {                                                                          \
-      uint32_t __temp = val;                                                   \
-      switch (regnum) {                                                        \
-      case 0:                                                                  \
-        asm volatile("vmovd %0, %%zmm0" : : "r"(__temp));                      \
-        break;                                                                 \
-      }                                                                        \
-    }                                                                          \
-  }
-#define SET_TO_REG(regnum, val)                                                \
-  {                                                                            \
-    {                                                                          \
-      uint32_t __temp = val;                                                   \
-      switch (regnum) {                                                        \
-      case 0:                                                                  \
-        asm volatile("vmovd %0, %%xmm0" : : "r"(__temp) : "%xmm0");            \
-        break;                                                                 \
-      case 1:                                                                  \
-        asm volatile("vmovd %0, %%xmm1" : : "r"(__temp) : "%xmm1");            \
-        break;                                                                 \
-      case 2:                                                                  \
-        asm volatile("vmovd %0, %%xmm2" : : "r"(__temp));                      \
-        break;                                                                 \
-      case 3:                                                                  \
-        asm volatile("vmovd %0, %%xmm3" : : "r"(__temp));                      \
-        break;                                                                 \
-      case 4:                                                                  \
-        asm volatile("vmovd %0, %%xmm4" : : "r"(__temp));                      \
-        break;                                                                 \
-      case 5:                                                                  \
-        asm volatile("vmovd %0, %%xmm5" : : "r"(__temp));                      \
-        break;                                                                 \
-      case 6:                                                                  \
-        asm volatile("vmovd %0, %%xmm6" : : "r"(__temp));                      \
-        break;                                                                 \
-      case 7:                                                                  \
-        asm volatile("vmovd %0, %%xmm7" : : "r"(__temp));                      \
-        break;                                                                 \
-      case 8:                                                                  \
-        asm volatile("vmovd %0, %%xmm8" : : "r"(__temp));                      \
-        break;                                                                 \
-      case 9:                                                                  \
-        asm volatile("vmovd %0, %%xmm9" : : "r"(__temp));                      \
-        break;                                                                 \
-      case 10:                                                                 \
-        asm volatile("vmovd %0, %%xmm10" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 11:                                                                 \
-        asm volatile("vmovd %0, %%xmm11" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 12:                                                                 \
-        asm volatile("vmovd %0, %%xmm12" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 13:                                                                 \
-        asm volatile("vmovd %0, %%xmm13" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 14:                                                                 \
-        asm volatile("vmovd %0, %%xmm14" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 15:                                                                 \
-        asm volatile("vmovd %0, %%xmm15" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 16:                                                                 \
-        asm volatile("vmovd %0, %%xmm16" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 17:                                                                 \
-        asm volatile("vmovd %0, %%xmm17" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 18:                                                                 \
-        asm volatile("vmovd %0, %%xmm18" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 19:                                                                 \
-        asm volatile("vmovd %0, %%xmm19" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 20:                                                                 \
-        asm volatile("vmovd %0, %%xmm20" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 21:                                                                 \
-        asm volatile("vmovd %0, %%xmm21" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 22:                                                                 \
-        asm volatile("vmovd %0, %%xmm22" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 23:                                                                 \
-        asm volatile("vmovd %0, %%xmm23" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 24:                                                                 \
-        asm volatile("vmovd %0, %%xmm24" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 25:                                                                 \
-        asm volatile("vmovd %0, %%xmm25" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 26:                                                                 \
-        asm volatile("vmovd %0, %%xmm26" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 27:                                                                 \
-        asm volatile("vmovd %0, %%xmm27" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 28:                                                                 \
-        asm volatile("vmovd %0, %%xmm28" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 29:                                                                 \
-        asm volatile("vmovd %0, %%xmm29" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 30:                                                                 \
-        asm volatile("vmovd %0, %%xmm30" : : "r"(__temp));                     \
-        break;                                                                 \
-      case 31:                                                                 \
-        asm volatile("vmovd %0, %%xmm31" : : "r"(__temp));                     \
-        break;                                                                 \
-      default:                                                                 \
-        break;                                                                 \
-      }                                                                        \
-    }                                                                          \
-  }
-
-#else
 #define GET_FROM_REG(dest, regnum) (dest = registers[regnum])
 #define SET_TO_REG(regnum, val) (registers[regnum] = val)
-
-#endif
 
 #define GET_RD(inst) ((inst) >> 7) & 0x1F
 #define GET_RS1(inst) ((inst) >> 15) & 0x1F
@@ -336,7 +108,7 @@ int riscv_vm_run_optimized_2(uint8_t *registers, uint8_t *program,
          ((double)duration / 1.0) / (double)mcycle_val);                       \
   return ec;
 
-static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
+static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
                                 uint32_t *pcp_out) {
   uint32_t registers[32];
   uint8_t *program = wmem;
@@ -345,14 +117,6 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
   int res = 0;
   memcpy(registers, initial_registers, REG_MEM_SIZE);
 
-#if USE_ZMM_REGISTERS
-  {
-    uint32_t zero = 0;
-    for (int i = 0; i < 32; i++) {
-      SET_TO_REG(i, zero);
-    }
-  }
-#endif
   static void *op_table[] = {
       &&uo,         &&uo,        &&uo, &&op_load,  &&uo,
       &&uo,         &&uo,        &&uo, &&uo,       &&uo,
@@ -382,6 +146,21 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
       &&uo,         &&uo,        &&uo, &&uo,       &&uo,
       &&uo,         &&uo,        &&uo, &&uo,       &&uo,
       &&uo};
+  static void *op_load_switch[] = {&&op_load_lb, &&op_load_lh,  &&op_load_lw,
+                                   &&normal_end, &&op_load_lbu, &&op_load_lhu};
+  static void *op_int_imm_op_switch[] = {
+      &&op_int_imm_op_addi,  &&op_int_imm_op_slli, &&op_int_imm_op_slti,
+      &&op_int_imm_op_sltiu, &&op_int_imm_op_xori, &&op_int_imm_op_srli,
+      &&op_int_imm_op_ori,   &&op_int_imm_op_andi};
+  static void *op_int_op_switch[] = {
+      &&op_int_op_add,  &&op_int_op_add_sll, &&op_int_op_slt,
+      &&op_int_op_sltu, &&op_int_op_xor,     &&op_int_op_srl,
+      &&op_int_op_or,   &&op_int_op_and,     &&op_int_op_mul,
+      &&op_int_op_mulh, &&op_int_op_mulhsu,  &&op_int_op_mulhu,
+      &&op_int_op_div,  &&op_int_op_divu,    &&op_int_op_rem,
+      &&op_int_op_remu, &&op_int_op_sub,     &&normal_end,
+      &&normal_end,     &&normal_end,        &&normal_end,
+      &&op_int_op_sra};
 
   while (res == 0) {
     mcycle_val++;
@@ -480,11 +259,13 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
 #endif
       exit_loop(ERR_INVALID_MEMORY_ACCESS);
     }
-    switch (GET_FUNCT3(instruction)) {
-    case 0: // lb
+    goto *op_load_switch[GET_FUNCT3(instruction)];
+    // switch (GET_FUNCT3(instruction))
+    {
+    op_load_lb:; // lb
       SET_TO_REG(rd, (int8_t)wmem[addr]);
-      break;
-    case 1: // lh
+      goto normal_end;
+    op_load_lh:; // lh
 #if DISALLOW_MISALIGNED
       if (addr & 1) {
 #if USE_PRINT
@@ -496,8 +277,8 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
       }
 #endif
       SET_TO_REG(rd, *(int16_t *)(wmem + addr));
-      break;
-    case 2: // lw
+      goto normal_end;
+    op_load_lw:; // lw
 #if DISALLOW_MISALIGNED
       if (addr & 3) {
 #if USE_PRINT
@@ -509,11 +290,11 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
       }
 #endif
       SET_TO_REG(rd, *(uint32_t *)(wmem + addr));
-      break;
-    case 4: // lbu
+      goto normal_end;
+    op_load_lbu:; // lbu
       SET_TO_REG(rd, wmem[addr]);
-      break;
-    case 5: // lhu
+      goto normal_end;
+    op_load_lhu:; // lhu
 #if DISALLOW_MISALIGNED
       if (addr & 1) {
 #if USE_PRINT
@@ -525,11 +306,8 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
       }
 #endif
       SET_TO_REG(rd, *(uint16_t *)(wmem + addr));
-      break;
-    default:
-      break;
+      goto normal_end;
     }
-    goto normal_end;
   }
   {
   op_int_imm_op:;
@@ -550,30 +328,32 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
            GET_FUNCT3(instruction), rd, GET_RS1(instruction),
            GET_RS2(instruction), immi);
 #endif
-    switch (GET_FUNCT3(instruction)) {
-    case 0: // addi
+    // switch (GET_FUNCT3(instruction))
+    goto *op_int_imm_op_switch[GET_FUNCT3(instruction)];
+    {
+    op_int_imm_op_addi:; // addi
       SET_TO_REG(rd, v1 + immi);
-      break;
-    case 2: // slti
+      goto normal_end;
+    op_int_imm_op_slti:; // slti
       SET_TO_REG(rd, (int32_t)v1 < immi ? 1 : 0);
-      break;
-    case 3: // sltiu
+      goto normal_end;
+    op_int_imm_op_sltiu:; // sltiu
       SET_TO_REG(rd, v1 < ((uint32_t)immi) ? 1 : 0);
-      break;
-    case 4: // xori
+      goto normal_end;
+    op_int_imm_op_xori:; // xori
       SET_TO_REG(rd, v1 ^ immi);
-      break;
-    case 6: // ori
+      goto normal_end;
+    op_int_imm_op_ori: // ori
       SET_TO_REG(rd, v1 | immi);
-      break;
-    case 7: // andi
+      goto normal_end;
+    op_int_imm_op_andi: // andi
       SET_TO_REG(rd, v1 & immi);
-      break;
-    case 1: // slli
+      goto normal_end;
+    op_int_imm_op_slli:; // slli
       shift = (instruction >> 20) & 0x1f;
       SET_TO_REG(rd, v1 << shift);
-      break;
-    case 5: // srli and srai
+      goto normal_end;
+    op_int_imm_op_srli:; // srli and srai
       shift = (instruction >> 20) & 0x1f;
       if ((instruction >> 30) & 1) {
         // srai
@@ -582,11 +362,8 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
         // srli
         registers[rd] = v1 >> shift;
       }
-      break;
-    default:
-      break;
+      goto normal_end;
     }
-    goto normal_end;
   }
   {
   op_auipc:;
@@ -727,21 +504,51 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
     printf("int op funct3=%d funct7=%d rd=%d rs1=%d rs2=%d\n", funct3, funct7,
            rd, GET_RS1(instruction), GET_RS2(instruction));
 #endif
-    if (funct7 == 1) { // M extension
-      switch (funct3) {
-      case 0: // mul
-        SET_TO_REG(rd, (int32_t)v1 * (int32_t)v2);
-        break;
-      case 1: // mulh
-        SET_TO_REG(rd, ((int64_t)(int32_t)v1 * (int64_t)(int32_t)v2) >> 32);
-        break;
-      case 2: // mulhsu
-        SET_TO_REG(rd, ((uint64_t)((int64_t)(int32_t)v1 * (uint64_t)v2)) >> 32);
-        break;
-      case 3: // mulhu
-        SET_TO_REG(rd, ((uint64_t)v1 * (uint64_t)v2) >> 32);
-        break;
-      case 4: // div
+    const uint8_t jump_point =
+        funct3 | ((instruction >> 22) & 8) | ((instruction >> 26) & 0x10);
+#if LOG_TRACE
+    printf("jump_point=%d\n", jump_point);
+#endif
+    goto *op_int_op_switch[jump_point];
+    {
+    op_int_op_add:; // add
+      SET_TO_REG(rd, v1 + v2);
+      goto normal_end;
+    op_int_op_add_sll:; // sll
+      SET_TO_REG(rd, v1 << (v2 & 0x1F));
+      goto normal_end;
+    op_int_op_slt:; // slt
+      SET_TO_REG(rd, (int32_t)v1 < (int32_t)v2 ? 1 : 0);
+      goto normal_end;
+    op_int_op_sltu: // sltu
+      SET_TO_REG(rd, v1 < v2 ? 1 : 0);
+      goto normal_end;
+    op_int_op_xor:; // xor
+      SET_TO_REG(rd, v1 ^ v2);
+      goto normal_end;
+    op_int_op_srl: // srl
+      // srl
+      SET_TO_REG(rd, v1 >> (v2 & 0x1F));
+      goto normal_end;
+    op_int_op_or: // or
+      SET_TO_REG(rd, v1 | v2);
+      goto normal_end;
+    op_int_op_and: // and
+      SET_TO_REG(rd, v1 & v2);
+      goto normal_end;
+    op_int_op_mul:; // mul
+      SET_TO_REG(rd, (int32_t)v1 * (int32_t)v2);
+      goto normal_end;
+    op_int_op_mulh:; // mulh
+      SET_TO_REG(rd, ((int64_t)(int32_t)v1 * (int64_t)(int32_t)v2) >> 32);
+      goto normal_end;
+    op_int_op_mulhsu: // mulhsu
+      SET_TO_REG(rd, ((uint64_t)((int64_t)(int32_t)v1 * (uint64_t)v2)) >> 32);
+      goto normal_end;
+    op_int_op_mulhu: // mulhu
+      SET_TO_REG(rd, ((uint64_t)v1 * (uint64_t)v2) >> 32);
+      goto normal_end;
+    op_int_op_div:; // div
       {
         if (v2 == 0) {
           SET_TO_REG(rd, 0xFFFFFFFF);
@@ -751,16 +558,16 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
         } else {
           SET_TO_REG(rd, (int32_t)v1 / (int32_t)v2);
         }
-        break;
+        goto normal_end;
       }
-      case 5: // divu
-        if (v2 == 0) {
-          SET_TO_REG(rd, 0xFFFFFFFF);
-        } else {
-          SET_TO_REG(rd, v1 / v2);
-        }
-        break;
-      case 6: // rem
+    op_int_op_divu:; // divu
+      if (v2 == 0) {
+        SET_TO_REG(rd, 0xFFFFFFFF);
+      } else {
+        SET_TO_REG(rd, v1 / v2);
+      }
+      goto normal_end;
+    op_int_op_rem:; // rem
       {
         if (v2 == 0) {
           SET_TO_REG(rd, v1);
@@ -770,9 +577,9 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
         } else {
           SET_TO_REG(rd, (int32_t)v1 % (int32_t)v2);
         }
-        break;
+        goto normal_end;
       }
-      case 7: // remu
+    op_int_op_remu:; // remu
       {
         if (v2 == 0) {
           SET_TO_REG(rd, v1);
@@ -782,50 +589,14 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
         } else {
           SET_TO_REG(rd, v1 % v2);
         }
-        break;
+        goto normal_end;
       }
-      default:
-        break;
-      }
-    } else {
-      switch (funct3) {
-      case 0: // add/sub
-        if (funct7 == 0) {
-          SET_TO_REG(rd, v1 + v2);
-        } else {
-          SET_TO_REG(rd, v1 - v2);
-        }
-        break;
-      case 1: // sll
-        SET_TO_REG(rd, v1 << (v2 & 0x1F));
-        break;
-      case 2: // slt
-        SET_TO_REG(rd, (int32_t)v1 < (int32_t)v2 ? 1 : 0);
-        break;
-      case 3: // sltu
-        SET_TO_REG(rd, v1 < v2 ? 1 : 0);
-        break;
-      case 4: // xor
-        SET_TO_REG(rd, v1 ^ v2);
-        break;
-      case 5: // srl and sra
-        if (funct7 == 0) {
-          // srl
-          SET_TO_REG(rd, v1 >> (v2 & 0x1F));
-        } else if (funct7 == 32) {
-          // sra
-          SET_TO_REG(rd, ((int32_t)v1) >> (v2 & 0x1F));
-        }
-        break;
-      case 6: // or
-        SET_TO_REG(rd, v1 | v2);
-        break;
-      case 7: // and
-        SET_TO_REG(rd, v1 & v2);
-        break;
-      default:
-        break;
-      }
+    op_int_op_sub:; // sub
+      SET_TO_REG(rd, v1 - v2);
+      goto normal_end;
+    op_int_op_sra:; // sra
+      SET_TO_REG(rd, ((int32_t)v1) >> (v2 & 0x1F));
+      goto normal_end;
     }
     goto normal_end;
   }
@@ -1108,18 +879,6 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
 }
 
 #if LOG_TRACE
-#if USE_ZMM_REGISTERS
-void dbg_dump_registers_short(uint32_t *reg) {
-  for (int i = 0; i < 32; i++) {
-    uint32_t val;
-    GET_FROM_REG(val, i);
-    if (val) {
-      printf("%02d 0x%04X ", i, val);
-    }
-  }
-  printf("\n");
-}
-#else
 void dbg_dump_registers_short(uint32_t *reg) {
   for (int i = 0; i < 32; i++) {
     uint32_t val = reg[i];
@@ -1129,5 +888,4 @@ void dbg_dump_registers_short(uint32_t *reg) {
   }
   printf("\n");
 }
-#endif
 #endif

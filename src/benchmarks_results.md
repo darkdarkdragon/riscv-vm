@@ -70,10 +70,37 @@ real	0m38.966s
 optimized
 real	0m27.662s
 5.920761 nanosec/inst
+or
+real	0m23.771s
+5.377836 nanosec/inst
+
 
 optimized2
 real	0m23.075s
 5.220222 nanosec/inst
+or
+real	0m21.499s
+4.863649 nanosec/inst
 
 spike
 real	0m30.015s
+
+
+### prime 4000000
+
+
+AWS t3.micro (Intel AVX-512):
+
+optimized
+real	3m17.254s
+5.478282 nanosec/inst
+real	3m19.449s
+5.539263 nanosec/inst
+
+optimized2
+real	2m52.090s
+4.779396 nanosec/inst
+
+optimized4
+real	2m54.536s
+4.847280 nanosec/inst

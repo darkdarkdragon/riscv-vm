@@ -2,9 +2,12 @@
 
 #include <stdint.h>
 
+#if !defined(LOG_TRACE)
 #define LOG_TRACE 0
+#endif
+#if !defined(LOG_DEBUG)
 #define LOG_DEBUG 0
-
+#endif
 
 /**
   Implements RV32IM virtual machine

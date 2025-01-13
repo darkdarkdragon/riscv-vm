@@ -368,6 +368,10 @@ int run_elf32v2(void *file_data, int verbose, int use_optimized) {
     return riscv_vm_run_optimized_1(NULL, text, text_len);
   } else if (use_optimized == 2) {
     return riscv_vm_run_optimized_2(NULL, text, text_len);
+  } else if (use_optimized == 3) {
+    return riscv_vm_run_optimized_3(NULL, text, text_len);
+  } else if (use_optimized == 4) {
+    return riscv_vm_run_optimized_4(NULL, text, text_len);
   }
   return riscv_vm_run(NULL, text, text_len, 0, 0, 0);
 }
@@ -404,6 +408,10 @@ int main(int argc, char *argv[]) {
       use_optimized = 1;
     } else if (strcmp(argv[i], "-opt2") == 0) {
       use_optimized = 2;
+    } else if (strcmp(argv[i], "-opt3") == 0) {
+      use_optimized = 3;
+    } else if (strcmp(argv[i], "-opt4") == 0) {
+      use_optimized = 4;
     } else if (strcmp(argv[i], "-verbose") == 0) {
       verbose = 1;
     } else {

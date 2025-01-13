@@ -4,14 +4,111 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "cycle-counter.h"
 #include "riscv-vm-common.h"
 #include "riscv-vm-optimized-1.h"
 
-#if USE_ZMM_REGISTERS
-// #include <immintrin.h>
-#endif
+#define USE_ZMM_REGISTERS 0
 
-#include "cycle-counter.h"
+#if USE_ZMM_REGISTERS
+#include <immintrin.h>
+
+/*
+uint32_t extract_lower32(__m512i zmm) {
+    __m128i xmm = _mm512_castsi512_si128(zmm);    // Downcast ZMM to XMM
+    return _mm_cvtsi128_si32(xmm);                // Extract lower 32 bits as
+uint32_t
+}
+
+uint32_t extract_lower32_alternative(__m512i zmm) {
+    return _mm512_maskz_extracti32x4_epi32(1, zmm, 0)[0];
+}
+*/
+
+uint32_t extract_last_32_bits(__m512i zmm) {
+  __m128i xmm =
+      _mm512_extracti32x4_epi32(zmm, 3); // Extract lane 3 (last 128 bits)
+  _mm_srli_si128(xmm, 12);
+  return _mm_cvtsi128_si32(xmm); // Get the lowest 32 bits of xmm
+}
+
+inline uint32_t zmm_extract_32_bits(__m512i zmm, int index) {
+  // __m128i xmm = _mm512_extracti32x4_epi32(zmm, index >> 2); // Extract lane 3
+  // (last 128 bits)
+  __m128i xmm;
+  switch (index >> 2) {
+  case 0:
+    xmm = _mm512_extracti32x4_epi32(zmm, 0);
+    break;
+  case 1:
+    xmm = _mm512_extracti32x4_epi32(zmm, 1);
+    break;
+  case 2:
+    xmm = _mm512_extracti32x4_epi32(zmm, 2);
+    break;
+  case 3:
+    xmm = _mm512_extracti32x4_epi32(zmm, 3);
+    break;
+  }
+  //__m128i xmm = _mm512_extracti32x4_epi32(zmm, index >> 2); // Extract lane 3
+  //(last 128 bits)
+
+  _mm_srli_si128(xmm, (index & 3) * 4);
+  return _mm_cvtsi128_si32(xmm); // Get the lowest 32 bits of xmm
+}
+
+inline __m512i zmm_set_32_bit(__m512i zmm, int index, uint32_t val) {
+  // __m512i scalar = _mm_set1_epi32(val); // Load scalar value
+  // __mmask16 mask = 0b1000000000000000;               // Mask: update only the
+  // high 32-bit element
+  __mmask16 mask = 1 << index;
+  // return _mm512_mask_broadcastd_epi32(zmm, mask, scalar);
+  return _mm512_mask_set1_epi32(zmm, mask, val);
+}
+
+// __m512i _mm512_insert_epi16(__m512i target, const std::int16_t x, const int
+// index)
+// {
+//     return _mm512_mask_set1_epi16(target, 1UL << index, x);
+// }
+// static inline __m512i _mm512_insert_epi32(__m512i target, const std::int32_t
+// x, const int index)
+// {
+//     return _mm512_mask_set1_epi32(target, 1UL << index, x);
+// }
+
+// template <int index>
+// int _mm512_extract_epi32(__m512i target)
+// {
+//     return _mm512_cvtsi512_si32(_mm512_alignr_epi32(target, target, index));
+// }
+
+// template <int index>
+// int  _mm512_extract_epi16(__m512i target)
+// {
+//     return (_mm512_extract_epi32<index / 2>(target) >> (index % 2 ? 16 : 0))
+//     & 0xFFFF;
+// }
+
+#define GET_FROM_REG(dest, regnum)                                             \
+  {                                                                            \
+    if (regnum & 1) {                                                          \
+      dest = zmm_extract_32_bits(zreg1, regnum >> 1);                          \
+    } else {                                                                   \
+      dest = zmm_extract_32_bits(zreg2, regnum >> 1);                          \
+    }                                                                          \
+  }
+
+#define SET_TO_REG(regnum, val)                                                \
+  {                                                                            \
+    if (regnum & 1) {                                                          \
+      zreg1 = zmm_set_32_bit(zreg1, regnum >> 1, val);                         \
+    } else {                                                                   \
+      zreg1 = zmm_set_32_bit(zreg2, regnum >> 1, val);                         \
+    }                                                                          \
+  }
+
+#endif
 
 // 1 MiB, memory available inside VM
 // static const int VM_MEMORY = 1048576;
@@ -23,7 +120,7 @@ static const size_t work_mem_size = VM_MEMORY * 1; // size of memory to allocate
 static void dbg_dump_registers_short(uint32_t *reg);
 #endif
 
-static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
+static int riscv_vm_main_loop_3(uint8_t *initial_registers, uint8_t *wmem,
                                 uint32_t *pcp_out);
 
 static uint64_t mcycle_val = 0;
@@ -31,7 +128,7 @@ static uint64_t start_time = 0;
 static uint64_t duration = 0;
 static double speed = 0;
 
-int riscv_vm_run_optimized_2(uint8_t *registers, uint8_t *program,
+int riscv_vm_run_optimized_3(uint8_t *registers, uint8_t *program,
                              uint32_t program_len) {
 
 #if USE_PRINT
@@ -74,7 +171,7 @@ int riscv_vm_run_optimized_2(uint8_t *registers, uint8_t *program,
 #if PRINT_REGISTERS
   dump_registers(registers);
 #endif
-  int res = riscv_vm_main_loop_2(registers, wmem, &pcp);
+  int res = riscv_vm_main_loop_3(registers, wmem, &pcp);
 #if PRINT_REGISTERS
   dump_registers(registers);
 #endif
@@ -86,7 +183,7 @@ int riscv_vm_run_optimized_2(uint8_t *registers, uint8_t *program,
 }
 
 #if USE_ZMM_REGISTERS
-#define GET_FROM_REG(dest, regnum)                                             \
+#define XGET_FROM_REG(dest, regnum)                                            \
   ({                                                                           \
     switch (regnum) {                                                          \
     case 0:                                                                    \
@@ -199,7 +296,7 @@ int riscv_vm_run_optimized_2(uint8_t *registers, uint8_t *program,
       }                                                                        \
     }                                                                          \
   }
-#define SET_TO_REG(regnum, val)                                                \
+#define ZSET_TO_REG(regnum, val)                                               \
   {                                                                            \
     {                                                                          \
       uint32_t __temp = val;                                                   \
@@ -336,7 +433,7 @@ int riscv_vm_run_optimized_2(uint8_t *registers, uint8_t *program,
          ((double)duration / 1.0) / (double)mcycle_val);                       \
   return ec;
 
-static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
+static int riscv_vm_main_loop_3(uint8_t *initial_registers, uint8_t *wmem,
                                 uint32_t *pcp_out) {
   uint32_t registers[32];
   uint8_t *program = wmem;
@@ -346,12 +443,40 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
   memcpy(registers, initial_registers, REG_MEM_SIZE);
 
 #if USE_ZMM_REGISTERS
+  __m512i zreg1 = _mm512_setzero_si512();
+  __m512i zreg2 = _mm512_setzero_si512();
+  // __m512i zregt;
   {
-    uint32_t zero = 0;
+    printf("=====> registers:");
+    for (int i = 0; i < 32; i++) {
+      uint32_t val;
+      GET_FROM_REG(val, i);
+      if (val) {
+        printf("%02d 0x%04X ", i, val);
+      }
+    }
+    printf("\n");
+  }
+  printf("=====> done\n");
+
+  {
+    uint32_t zero = 10;
     for (int i = 0; i < 32; i++) {
       SET_TO_REG(i, zero);
     }
   }
+  {
+    printf("=====> registers:");
+    for (int i = 0; i < 32; i++) {
+      uint32_t val;
+      GET_FROM_REG(val, i);
+      if (val) {
+        printf("%02d 0x%04X ", i, val);
+      }
+    }
+    printf("\n");
+  }
+  printf("=====> done\n");
 #endif
   static void *op_table[] = {
       &&uo,         &&uo,        &&uo, &&op_load,  &&uo,
@@ -391,6 +516,17 @@ static int riscv_vm_main_loop_2(uint8_t *initial_registers, uint8_t *wmem,
     dbg_dump_registers_short(registers);
     //  printf("\n");
 #endif
+    {
+      for (int i = 0; i < 32; i++) {
+        uint32_t val;
+        GET_FROM_REG(val, i);
+        if (val) {
+          printf("%02d 0x%04X ", i, val);
+        }
+      }
+      printf("\n");
+    }
+
     goto *op_table[instruction & 0x7F];
   /*
     switch (instruction & 0x7F) {
