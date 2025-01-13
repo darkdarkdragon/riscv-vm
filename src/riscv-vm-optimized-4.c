@@ -115,6 +115,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
   uint32_t pc = 0;
   uint32_t instruction;
   int res = 0;
+  uint8_t rd = 0;
   memcpy(registers, initial_registers, REG_MEM_SIZE);
 
   static void *op_table[] = {
@@ -311,7 +312,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
   }
   {
   op_int_imm_op:;
-    const uint8_t rd = GET_RD(instruction);
+    rd = GET_RD(instruction);
     if (rd == 0) {
       goto normal_end;
     }
@@ -367,7 +368,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
   }
   {
   op_auipc:;
-    const uint8_t rd = GET_RD(instruction);
+    rd = GET_RD(instruction);
     if (rd != 0) {
       SET_TO_REG(rd, pc + GET_IMM_U(instruction));
     }
@@ -486,12 +487,12 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
   }
   {
   op_int_op:;
-    const uint8_t rd = GET_RD(instruction);
+    rd = GET_RD(instruction);
     if (rd == 0) {
       goto normal_end;
     }
     const uint8_t funct3 = GET_FUNCT3(instruction);
-    const uint8_t funct7 = GET_FUNCT7(instruction);
+    // const uint8_t funct7 = GET_FUNCT7(instruction);
     /*
     // const uint32_t v1 = GET_FROM_REG(GET_RS1(instruction));
     // const uint32_t v2 = GET_FROM_REG(GET_RS2(instruction));
@@ -602,7 +603,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
   }
   {
   op_lui:;
-    const uint8_t rd = GET_RD(instruction);
+    rd = GET_RD(instruction);
 #if LOG_TRACE
     printf("lui rd=%d imm=%d\n", rd, GET_IMM_U(instruction));
 #endif
@@ -671,7 +672,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
   }
   {
   op_jalr:;
-    const uint8_t rd = GET_RD(instruction);
+    rd = GET_RD(instruction);
 
     /*
     // const uint32_t addr =
@@ -699,7 +700,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
   }
   {
   op_jal:;
-    const uint8_t rd = GET_RD(instruction);
+    rd = GET_RD(instruction);
     const uint32_t imm =
         ((instruction << 11) & 0x7F800000) | ((instruction << 2) & (1 << 22)) |
         ((instruction >> 9) & 0x3FF000) | (instruction & (1 << 31));
@@ -794,7 +795,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
       }
       goto normal_end;
     }
-    const uint8_t rd = GET_RD(instruction);
+    rd = GET_RD(instruction);
     const uint32_t csr = (instruction >> 20) & 0xFFF;
 #if USE_PRINT && LOG_TRACE
     const uint8_t rs1 = GET_RS1(instruction);

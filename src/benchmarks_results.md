@@ -102,5 +102,5 @@ real	2m52.090s
 4.779396 nanosec/inst
 
 optimized4
-real	2m54.536s
-4.847280 nanosec/inst
+real	2m52.972s
+4.803885 nanosec/inst
