@@ -91,8 +91,6 @@ int riscv_vm_run_optimized_4(uint8_t *registers, uint8_t *program,
 #define GET_FUNCT7(inst) ((inst) >> 25) & 0x7F
 #define GET_IMM_I(inst) ((int32_t)(inst) >> 20)
 #define GET_IMM_U(inst) ((inst) & 0xFFFFF000)
-// #define GET_IMM_S(inst) ((int32_t)(((inst) >> 25) << 5) + ((inst) >> 7) &
-// 0x1F)
 #define GET_IMM_S(inst)                                                        \
   ((int32_t)((inst & 0xFE000000) | ((inst & 0xF80) << 13)) >> 20)
 
@@ -172,52 +170,6 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
     //  printf("\n");
 #endif
     goto *op_table[instruction & 0x7F];
-  /*
-    switch (instruction & 0x7F) {
-    case 0x03:
-      // if ((res = op_load(registers, program, instruction, pc))) {
-      //   exit_loop(res);
-      // }
-      goto op_load;
-      break;
-    case 0x0F:
-      // misc-mem opcode, nop
-      break;
-    case 0x13:
-      goto op_int_imm_op;
-      break;
-    case 0x17:
-      goto op_auipc;
-      break;
-    case 0x23:
-      goto op_store;
-      break;
-    case 0x33:
-      goto op_int_op;
-      break;
-    case 0x37:
-      goto op_lui;
-      break;
-    case 0x63:
-      goto op_branch;
-      break;
-    case 0x67:
-      goto op_jalr;
-      continue;
-    case 0x6f:
-      goto op_jal;
-      continue;
-    case 0x73:
-      goto op_system;
-      break;
-    default:
-#if USE_PRINT
-      fprintf(stderr, "Unimplemented or invalid opcode 0x%02X at PC 0x%02X\n",
-              instruction & 0x7F, pc);
-#endif
-      exit_loop(ERR_UNIMPLEMENTED_OPCODE) break;
-    }
-    */
   normal_end:;
     pc += 4;
   jump_end:;
@@ -238,10 +190,6 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
     if (rd == 0) {
       goto normal_end;
     }
-    /*
-    // uint32_t addr = GET_FROM_REG(GET_RS1(instruction)) +
-    // GET_IMM_I(instruction);
-    */
     uint32_t addr;
     GET_FROM_REG(addr, GET_RS1(instruction));
     addr += GET_IMM_I(instruction);
@@ -261,7 +209,6 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
       exit_loop(ERR_INVALID_MEMORY_ACCESS);
     }
     goto *op_load_switch[GET_FUNCT3(instruction)];
-    // switch (GET_FUNCT3(instruction))
     {
     op_load_lb:; // lb
       SET_TO_REG(rd, (int8_t)wmem[addr]);
@@ -319,9 +266,6 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
     uint8_t shift;
     const uint8_t rs1 = GET_RS1(instruction);
     int32_t immi = GET_IMM_I(instruction);
-    /*
-    // uint32_t v1 = GET_FROM_REG(rs1);
-    */
     uint32_t v1;
     GET_FROM_REG(v1, rs1);
 #if LOG_TRACE
@@ -329,7 +273,6 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
            GET_FUNCT3(instruction), rd, GET_RS1(instruction),
            GET_RS2(instruction), immi);
 #endif
-    // switch (GET_FUNCT3(instruction))
     goto *op_int_imm_op_switch[GET_FUNCT3(instruction)];
     {
     op_int_imm_op_addi:; // addi
@@ -377,11 +320,6 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
   {
   op_store:;
     const uint8_t funct3 = GET_FUNCT3(instruction);
-    /*
-    // const uint32_t v2 = GET_FROM_REG(GET_RS2(instruction));
-    // uint32_t addr = GET_FROM_REG(GET_RS1(instruction)) +
-    // GET_IMM_S(instruction);
-    */
     uint32_t v2;
     GET_FROM_REG(v2, GET_RS2(instruction));
     uint32_t addr;
@@ -492,11 +430,6 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
       goto normal_end;
     }
     const uint8_t funct3 = GET_FUNCT3(instruction);
-    // const uint8_t funct7 = GET_FUNCT7(instruction);
-    /*
-    // const uint32_t v1 = GET_FROM_REG(GET_RS1(instruction));
-    // const uint32_t v2 = GET_FROM_REG(GET_RS2(instruction));
-    */
     uint32_t v1;
     GET_FROM_REG(v1, GET_RS1(instruction));
     uint32_t v2;
@@ -584,9 +517,6 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
       {
         if (v2 == 0) {
           SET_TO_REG(rd, v1);
-          // } else if (v1 == INT_MIN_HEX && ()v2 == -1) {
-          //   // integer overflow
-          //   registers[rd] = 0;
         } else {
           SET_TO_REG(rd, v1 % v2);
         }
@@ -614,10 +544,6 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
   }
   {
   op_branch:;
-    /*
-    // const uint32_t v1 = GET_FROM_REG(GET_RS1(instruction));
-    // const uint32_t v2 = GET_FROM_REG(GET_RS2(instruction));
-    */
     uint32_t v1;
     GET_FROM_REG(v1, GET_RS1(instruction));
     uint32_t v2;
@@ -769,8 +695,6 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
   op_system:;
     const uint8_t funct3 = GET_FUNCT3(instruction);
     const uint8_t funct7 = GET_FUNCT7(instruction);
-    // const uint32_t v1 = registers[GET_RS1(instruction)];
-    // const uint32_t v2 = registers[GET_RS2(instruction)];
 
     if (funct3 == 0x0) {
       switch (funct7) {
