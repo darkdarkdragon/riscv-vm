@@ -44,7 +44,8 @@ int findNPrimes(int n) {
 }
 
 int main() {
-    int n=1000000;
+    // int n=1000000;
+    int n=4000000;
     printf("Looking for %d first prime numbers:\n", n);
     int last_prime = findNPrimes(n);
     printf("Last prime is %d\n", last_prime);
