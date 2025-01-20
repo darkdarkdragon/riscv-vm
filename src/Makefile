@@ -1,4 +1,6 @@
 
+CURRENT_DIR := $(shell pwd)
+
 # Compiler
 CC = gcc
 
@@ -14,7 +16,7 @@ CFLAGS = -Wall -Wextra -O3
 
 # Source files
 SRC_SIMPLE=simple.c riscv-vm-portable.c
-SRC_RUNELF=runelf.c riscv-vm-portable.c riscv-vm-optimized-1.c riscv-vm-optimized-2.c riscv-vm-common.c riscv-vm-optimized-3.c riscv-vm-optimized-4.c
+SRC_RUNELF=runelf.c riscv-vm-portable.c riscv-vm-optimized-1.c riscv-vm-optimized-2.c riscv-vm-common.c riscv-vm-optimized-3.c riscv-vm-optimized-4.c riscv-vm-syscall-handler.c
 
 # Output executables
 OUT_SIMPLE=simple
@@ -80,6 +82,10 @@ run-prime2: $(OUT_RUNELF)
 
 spike-prime: $(OUT_RUNELF)
 	spike --isa=rv32im ../benchmarks/prime.riscv
+
+run-doom: $(OUT_RUNELF)
+	echo $(CURRENT_DIR)
+	cd /Users/dark/projects/doom/riscv-vm-doom/test && $(CURRENT_DIR)/$(OUT_RUNELF) doom -verbose -opt4
 
 # Clean target
 clean:

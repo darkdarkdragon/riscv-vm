@@ -81,6 +81,7 @@ int riscv_vm_run_optimized_4(uint8_t *registers, uint8_t *program,
   return res;
 }
 
+#define GET_FROM_REG_DIRECT(regnum) (registers[regnum])
 #define GET_FROM_REG(dest, regnum) (dest = registers[regnum])
 #define SET_TO_REG(regnum, val) (registers[regnum] = val)
 
@@ -165,7 +166,8 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
     mcycle_val++;
     instruction = *(uint32_t *)(program + pc);
 #if LOG_TRACE
-    printf("PC: 0x%04X inst 0x%08X ", pc, instruction);
+    uint8_t __op = instruction & 0x7F;
+    printf("PC: 0x%04X inst 0x%08X %8s > ", pc, instruction, op_names[__op]);
     dbg_dump_registers_short(registers);
     //  printf("\n");
 #endif
@@ -435,6 +437,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
     uint32_t v2;
     GET_FROM_REG(v2, GET_RS2(instruction));
 #if LOG_TRACE
+    const uint8_t funct7 = GET_FUNCT7(instruction);
     printf("int op funct3=%d funct7=%d rd=%d rs1=%d rs2=%d\n", funct3, funct7,
            rd, GET_RS1(instruction), GET_RS2(instruction));
 #endif
@@ -683,13 +686,21 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
       // write
 //  printf("write %c\n", a0);
 #if USE_PRINT
-      putchar(a0);
+      // putchar(a0);
 #endif
       break;
     default:
       break;
     }
-    return 0;
+    {
+      uint32_t res =
+          syscall_handler(a7, GET_FROM_REG_DIRECT(10), GET_FROM_REG_DIRECT(11),
+                          GET_FROM_REG_DIRECT(12), GET_FROM_REG_DIRECT(13),
+                          GET_FROM_REG_DIRECT(14), GET_FROM_REG_DIRECT(15),
+                          GET_FROM_REG_DIRECT(16), wmem);
+      SET_TO_REG(10, res);
+    }
+    goto normal_end;
   }
   {
   op_system:;

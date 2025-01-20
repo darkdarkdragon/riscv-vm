@@ -11,6 +11,7 @@
 #define USE_TOHOST_SYSCALL 1
 #define PRINT_REGISTERS 0
 
+extern char *op_names[128];
 
 /**
   Implements RV32IM virtual machine
@@ -27,3 +28,5 @@ int riscv_vm_run_optimized_2(uint8_t *registers, uint8_t *program, uint32_t prog
 int riscv_vm_run_optimized_3(uint8_t *registers, uint8_t *program, uint32_t program_len);
 
 int riscv_vm_run_optimized_4(uint8_t *registers, uint8_t *program, uint32_t program_len);
+
+uint32_t syscall_handler(uint32_t syscall_number, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4, uint32_t arg5, uint32_t arg6, uint32_t arg7, void* wmem);
