@@ -16,7 +16,9 @@ CFLAGS = -Wall -Wextra -O3
 
 # Source files
 SRC_SIMPLE=simple.c riscv-vm-portable.c
-SRC_RUNELF=runelf.c riscv-vm-portable.c riscv-vm-optimized-1.c riscv-vm-optimized-2.c riscv-vm-common.c riscv-vm-optimized-3.c riscv-vm-optimized-4.c riscv-vm-syscall-handler.c
+SRC_RUNELF=runelf.c riscv-vm-portable.c riscv-vm-optimized-1.c riscv-vm-optimized-2.c \
+  riscv-vm-common.c riscv-vm-optimized-3.c riscv-vm-optimized-4.c riscv-vm-syscall-handler.c \
+  runelf-lib.c
 
 # Output executables
 OUT_SIMPLE=simple
