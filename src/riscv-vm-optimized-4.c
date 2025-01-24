@@ -25,6 +25,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
 static uint64_t mcycle_val = 0;
 static uint64_t start_time = 0;
 static uint64_t duration = 0;
+static uint64_t cur_time = 0;
 static double speed = 0;
 
 int riscv_vm_run_optimized_4(uint8_t *registers, uint8_t *program,
@@ -164,6 +165,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
 
   while (res == 0) {
     mcycle_val++;
+    cur_time = get_cycles() - start_time;
     instruction = *(uint32_t *)(program + pc);
 #if LOG_TRACE
     uint8_t __op = instruction & 0x7F;
@@ -747,8 +749,21 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
       // csrrw
       break;
     case 0x2:
+      // printf("--> csrrs %d (%x)\n", csr, csr);
       // csrrs
       switch (csr) {
+      case 0xc01: // time
+      {
+        if (rd) {
+          SET_TO_REG(rd, cur_time);
+        }
+      } break;
+      case 0xc81: // timeh
+      {
+        if (rd) {
+          SET_TO_REG(rd, cur_time >> 32);
+        }
+      } break;
       case 0xF14: // mhartid (Hardware thread ID.)
       {
         if (rd) {
