@@ -265,7 +265,7 @@ int main(int argc, char *argv[]) {
   if (e_ident[EI_CLASS] == ELFCLASS32) {
     // process_elf32(file_data);
     // run_elf32(file_data);
-    exit_code = run_elf32v2(file_data, verbose, use_optimized);
+    exit_code = run_elf32v2(file_data, verbose, use_optimized, 0);
   } else if (e_ident[EI_CLASS] == ELFCLASS64) {
     // process_elf64(file_data);
     fprintf(stderr, "Can't run 64 bit programs\n");

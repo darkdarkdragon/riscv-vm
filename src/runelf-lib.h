@@ -1,5 +1,6 @@
 
 #include <inttypes.h>
+#include "riscv-vm-optimized-1.h"
 
 /* ELF Definitions */
 #define EI_NIDENT 16
@@ -138,5 +139,5 @@ typedef struct {
   uint64_t sh_entsize;
 } Elf64_Shdr;
 
-int run_elf32v2(void *file_data, int verbose, int use_optimized);
+int run_elf32v2(void *file_data, int verbose, int use_optimized, syscall_handler_t user_syscall_handler);
 char *get_machine_name(uint16_t machine);

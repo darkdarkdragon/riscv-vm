@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #define SYS_write 64
+#define SYS_print_mem_access 2048
 #define INT_MIN_HEX 0x80000000
 
 // 32 registers, 32 bits each

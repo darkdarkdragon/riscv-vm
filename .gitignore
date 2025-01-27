@@ -2,6 +2,7 @@
 *.bin
 /src/simple
 /src/runelf
+/src/runelf-gr
 /backups
 /log.txt
 /src/*.riscv

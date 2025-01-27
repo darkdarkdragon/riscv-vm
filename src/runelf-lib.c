@@ -17,7 +17,7 @@ char *get_machine_name(uint16_t machine) {
   }
 }
 
-int run_elf32v2(void *file_data, int verbose, int use_optimized) {
+int run_elf32v2(void *file_data, int verbose, int use_optimized, syscall_handler_t user_syscall_handler) {
   Elf32_Ehdr *ehdr = (Elf32_Ehdr *)file_data;
   Elf32_Phdr *phdr = (Elf32_Phdr *)((char *)file_data + ehdr->e_phoff);
   // Elf32_Shdr *shdr = (Elf32_Shdr *)((char *)file_data + ehdr->e_shoff);
@@ -53,7 +53,7 @@ int run_elf32v2(void *file_data, int verbose, int use_optimized) {
   } else if (use_optimized == 3) {
     return riscv_vm_run_optimized_3(NULL, text, text_len);
   } else if (use_optimized == 4) {
-    return riscv_vm_run_optimized_4(NULL, text, text_len);
+    return riscv_vm_run_optimized_4(NULL, text, text_len, user_syscall_handler);
   }
   return riscv_vm_run(NULL, text, text_len, 0, 0, 0);
 }

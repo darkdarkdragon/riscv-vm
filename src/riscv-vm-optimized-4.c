@@ -11,7 +11,7 @@
 
 // 1 MiB, memory available inside VM
 // static const int VM_MEMORY = 1048576;
-static const int VM_MEMORY = 1048576 * 16;
+static const int VM_MEMORY = 1048576 * 32;
 
 static const size_t work_mem_size = VM_MEMORY * 1; // size of memory to allocate
 
@@ -19,8 +19,7 @@ static const size_t work_mem_size = VM_MEMORY * 1; // size of memory to allocate
 static void dbg_dump_registers_short(uint32_t *reg);
 #endif
 
-static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
-                                uint32_t *pcp_out);
+static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem, uint32_t *pcp_out, syscall_handler_t user_syscall_handler);
 
 static uint64_t mcycle_val = 0;
 static uint64_t start_time = 0;
@@ -28,18 +27,14 @@ static uint64_t duration = 0;
 static uint64_t cur_time = 0;
 static double speed = 0;
 
-int riscv_vm_run_optimized_4(uint8_t *registers, uint8_t *program,
-                             uint32_t program_len) {
+int riscv_vm_run_optimized_4(uint8_t *registers, uint8_t *program, uint32_t program_len, syscall_handler_t user_syscall_handler) {
 
 #if USE_PRINT
-  printf("Starting VM... work mem size %zu program len %d\n", work_mem_size,
-         program_len);
+  printf("Starting VM... work mem size %zu program len %d\n", work_mem_size, program_len);
 #endif
   if (program_len > work_mem_size) {
 #if USE_PRINT
-    fprintf(stderr,
-            "Program too long for memory, program size %d memory size %zu\n",
-            program_len, work_mem_size);
+    fprintf(stderr, "Program too long for memory, program size %d memory size %zu\n", program_len, work_mem_size);
 #endif
     return ERR_OUT_OF_MEM;
   }
@@ -71,7 +66,7 @@ int riscv_vm_run_optimized_4(uint8_t *registers, uint8_t *program,
 #if PRINT_REGISTERS
   dump_registers(registers);
 #endif
-  int res = riscv_vm_main_loop_4(registers, wmem, &pcp);
+  int res = riscv_vm_main_loop_4(registers, wmem, &pcp, user_syscall_handler);
 #if PRINT_REGISTERS
   dump_registers(registers);
 #endif
@@ -93,75 +88,50 @@ int riscv_vm_run_optimized_4(uint8_t *registers, uint8_t *program,
 #define GET_FUNCT7(inst) ((inst) >> 25) & 0x7F
 #define GET_IMM_I(inst) ((int32_t)(inst) >> 20)
 #define GET_IMM_U(inst) ((inst) & 0xFFFFF000)
-#define GET_IMM_S(inst)                                                        \
-  ((int32_t)((inst & 0xFE000000) | ((inst & 0xF80) << 13)) >> 20)
+#define GET_IMM_S(inst) ((int32_t)((inst & 0xFE000000) | ((inst & 0xF80) << 13)) >> 20)
 
-#define exit_loop(ec)                                                          \
-  memcpy(initial_registers, registers, REG_MEM_SIZE);                          \
-  *pcp_out = pc;                                                               \
-  duration = get_cycles() - start_time;                                        \
-  speed = (double)mcycle_val / ((double)duration / 1e9);                       \
-  printf("system exit mcycle=%" PRIu64 " dur %" PRIu64                         \
-         " speed is %g ops/sec (%f "                                           \
-         "nanosec/inst)\n",                                                    \
-         mcycle_val, duration, speed,                                          \
-         ((double)duration / 1.0) / (double)mcycle_val);                       \
+#define exit_loop(ec)                                                                                                                      \
+  memcpy(initial_registers, registers, REG_MEM_SIZE);                                                                                      \
+  *pcp_out = pc;                                                                                                                           \
+  duration = get_cycles() - start_time;                                                                                                    \
+  speed = (double)mcycle_val / ((double)duration / 1e9);                                                                                   \
+  printf("system exit mcycle=%" PRIu64 " dur %" PRIu64 " speed is %g ops/sec (%f "                                                         \
+         "nanosec/inst)\n",                                                                                                                \
+         mcycle_val, duration, speed, ((double)duration / 1.0) / (double)mcycle_val);                                                      \
   return ec;
 
-static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
-                                uint32_t *pcp_out) {
+static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem, uint32_t *pcp_out, syscall_handler_t user_syscall_handler) {
   uint32_t registers[32];
   uint8_t *program = wmem;
   uint32_t pc = 0;
   uint32_t instruction;
   int res = 0;
   uint8_t rd = 0;
+  uint32_t mem_write_intercept = 0;
   memcpy(registers, initial_registers, REG_MEM_SIZE);
 
-  static void *op_table[] = {
-      &&uo,         &&uo,        &&uo, &&op_load,  &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&normal_end, &&uo,        &&uo, &&uo,       &&op_int_imm_op,
-      &&uo,         &&uo,        &&uo, &&op_auipc, &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&op_store,   &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&op_int_op, &&uo, &&uo,       &&uo,
-      &&op_lui,     &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&op_branch,
-      &&uo,         &&uo,        &&uo, &&op_jalr,  &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&op_jal,    &&uo, &&uo,       &&uo,
-      &&op_system,  &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo,         &&uo,        &&uo, &&uo,       &&uo,
-      &&uo};
-  static void *op_load_switch[] = {&&op_load_lb, &&op_load_lh,  &&op_load_lw,
-                                   &&normal_end, &&op_load_lbu, &&op_load_lhu};
-  static void *op_int_imm_op_switch[] = {
-      &&op_int_imm_op_addi,  &&op_int_imm_op_slli, &&op_int_imm_op_slti,
-      &&op_int_imm_op_sltiu, &&op_int_imm_op_xori, &&op_int_imm_op_srli,
-      &&op_int_imm_op_ori,   &&op_int_imm_op_andi};
-  static void *op_int_op_switch[] = {
-      &&op_int_op_add,  &&op_int_op_add_sll, &&op_int_op_slt,
-      &&op_int_op_sltu, &&op_int_op_xor,     &&op_int_op_srl,
-      &&op_int_op_or,   &&op_int_op_and,     &&op_int_op_mul,
-      &&op_int_op_mulh, &&op_int_op_mulhsu,  &&op_int_op_mulhu,
-      &&op_int_op_div,  &&op_int_op_divu,    &&op_int_op_rem,
-      &&op_int_op_remu, &&op_int_op_sub,     &&normal_end,
-      &&normal_end,     &&normal_end,        &&normal_end,
-      &&op_int_op_sra};
+  static void *op_table[] = {&&uo, &&uo,        &&uo, &&op_load,  &&uo, &&uo,         &&uo, &&uo, &&uo, &&uo,
+                             &&uo, &&uo,        &&uo, &&uo,       &&uo, &&normal_end, &&uo, &&uo, &&uo, &&op_int_imm_op,
+                             &&uo, &&uo,        &&uo, &&op_auipc, &&uo, &&uo,         &&uo, &&uo, &&uo, &&uo,
+                             &&uo, &&uo,        &&uo, &&uo,       &&uo, &&op_store,   &&uo, &&uo, &&uo, &&uo,
+                             &&uo, &&uo,        &&uo, &&uo,       &&uo, &&uo,         &&uo, &&uo, &&uo, &&uo,
+                             &&uo, &&op_int_op, &&uo, &&uo,       &&uo, &&op_lui,     &&uo, &&uo, &&uo, &&uo,
+                             &&uo, &&uo,        &&uo, &&uo,       &&uo, &&uo,         &&uo, &&uo, &&uo, &&uo,
+                             &&uo, &&uo,        &&uo, &&uo,       &&uo, &&uo,         &&uo, &&uo, &&uo, &&uo,
+                             &&uo, &&uo,        &&uo, &&uo,       &&uo, &&uo,         &&uo, &&uo, &&uo, &&uo,
+                             &&uo, &&uo,        &&uo, &&uo,       &&uo, &&uo,         &&uo, &&uo, &&uo, &&op_branch,
+                             &&uo, &&uo,        &&uo, &&op_jalr,  &&uo, &&uo,         &&uo, &&uo, &&uo, &&uo,
+                             &&uo, &&op_jal,    &&uo, &&uo,       &&uo, &&op_system,  &&uo, &&uo, &&uo, &&uo,
+                             &&uo, &&uo,        &&uo, &&uo,       &&uo, &&uo,         &&uo, &&uo, &&uo, &&uo,
+                             &&uo, &&uo,        &&uo, &&uo,       &&uo, &&uo};
+  static void *op_load_switch[] = {&&op_load_lb, &&op_load_lh, &&op_load_lw, &&normal_end, &&op_load_lbu, &&op_load_lhu};
+  static void *op_int_imm_op_switch[] = {&&op_int_imm_op_addi, &&op_int_imm_op_slli, &&op_int_imm_op_slti, &&op_int_imm_op_sltiu,
+                                         &&op_int_imm_op_xori, &&op_int_imm_op_srli, &&op_int_imm_op_ori,  &&op_int_imm_op_andi};
+  static void *op_int_op_switch[] = {&&op_int_op_add,    &&op_int_op_add_sll, &&op_int_op_slt, &&op_int_op_sltu, &&op_int_op_xor,
+                                     &&op_int_op_srl,    &&op_int_op_or,      &&op_int_op_and, &&op_int_op_mul,  &&op_int_op_mulh,
+                                     &&op_int_op_mulhsu, &&op_int_op_mulhu,   &&op_int_op_div, &&op_int_op_divu, &&op_int_op_rem,
+                                     &&op_int_op_remu,   &&op_int_op_sub,     &&normal_end,    &&normal_end,     &&normal_end,
+                                     &&normal_end,       &&op_int_op_sra};
 
   while (res == 0) {
     mcycle_val++;
@@ -182,8 +152,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
   {
   uo:;
 #if USE_PRINT
-    fprintf(stderr, "Unimplemented or invalid opcode 0x%02X at PC 0x%02X\n",
-            instruction & 0x7F, pc);
+    fprintf(stderr, "Unimplemented or invalid opcode 0x%02X at PC 0x%02X\n", instruction & 0x7F, pc);
 #endif
     exit_loop(ERR_UNIMPLEMENTED_OPCODE);
   }
@@ -221,9 +190,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
 #if DISALLOW_MISALIGNED
       if (addr & 1) {
 #if USE_PRINT
-        fprintf(stderr,
-                "misaligned load at pc %X (addr %0X) (instruction %X)\n", pc,
-                addr, instruction);
+        fprintf(stderr, "misaligned load at pc %X (addr %0X) (instruction %X)\n", pc, addr, instruction);
 #endif
         exit_loop(ERR_MISALIGNED_MEMORY_ACCESS);
       }
@@ -234,9 +201,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
 #if DISALLOW_MISALIGNED
       if (addr & 3) {
 #if USE_PRINT
-        fprintf(stderr,
-                "misaligned load at pc 0x%X (addr 0x%0X) (instruction 0x%X)\n",
-                pc, addr, instruction);
+        fprintf(stderr, "misaligned load at pc 0x%X (addr 0x%0X) (instruction 0x%X)\n", pc, addr, instruction);
 #endif
         exit_loop(ERR_MISALIGNED_MEMORY_ACCESS);
       }
@@ -250,9 +215,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
 #if DISALLOW_MISALIGNED
       if (addr & 1) {
 #if USE_PRINT
-        fprintf(stderr,
-                "misaligned load at pc 0x%X (addr 0x%0X) (instruction 0x%X)\n",
-                pc, addr, instruction);
+        fprintf(stderr, "misaligned load at pc 0x%X (addr 0x%0X) (instruction 0x%X)\n", pc, addr, instruction);
 #endif
         exit_loop(ERR_MISALIGNED_MEMORY_ACCESS);
       }
@@ -273,9 +236,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
     uint32_t v1;
     GET_FROM_REG(v1, rs1);
 #if LOG_TRACE
-    printf("op imm funct3=%d rd=%d rs1=%d rs2=%d imms=%d\n",
-           GET_FUNCT3(instruction), rd, GET_RS1(instruction),
-           GET_RS2(instruction), immi);
+    printf("op imm funct3=%d rd=%d rs1=%d rs2=%d imms=%d\n", GET_FUNCT3(instruction), rd, GET_RS1(instruction), GET_RS2(instruction), immi);
 #endif
     goto *op_int_imm_op_switch[GET_FUNCT3(instruction)];
     {
@@ -332,6 +293,9 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
 #if LOG_TRACE
     printf("op_store addr 0x%x imm %d\n", addr, GET_IMM_S(instruction));
 #endif
+    if (mem_write_intercept && addr == mem_write_intercept) {
+      printf("MEM_INTERCEPT: op_store addr 0x%x v2 %d (0x%x) PC 0x%x\n", addr, v2, v2, pc);
+    }
 
 #if EMULATE_UART_OUT
     if (addr == UART_OUT_REGISTER) {
@@ -357,11 +321,10 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
 
     if (__builtin_expect(addr >= work_mem_size, 0)) {
 #if USE_PRINT
-      fprintf(
-          stderr,
-          "store went beyond allocated memory pc %X (addr %0X) (instruction "
-          "%X)\n",
-          pc, addr, instruction);
+      fprintf(stderr,
+              "store went beyond allocated memory pc %X (addr %0X) (instruction "
+              "%X)\n",
+              pc, addr, instruction);
 #endif
       exit_loop(ERR_INVALID_MEMORY_ACCESS);
     }
@@ -400,9 +363,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
 #if DISALLOW_MISALIGNED
       if (addr & 1) {
 #if USE_PRINT
-        fprintf(stderr,
-                "misaligned load at pc %X (addr %0X) (instruction %X)\n", pc,
-                addr, instruction);
+        fprintf(stderr, "misaligned load at pc %X (addr %0X) (instruction %X)\n", pc, addr, instruction);
 #endif
         exit_loop(ERR_MISALIGNED_MEMORY_ACCESS);
       }
@@ -413,9 +374,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
 #if DISALLOW_MISALIGNED
       if (addr & 3) {
 #if USE_PRINT
-        fprintf(stderr,
-                "misaligned load at pc %X (addr %0X) (instruction %X)\n", pc,
-                addr, instruction);
+        fprintf(stderr, "misaligned load at pc %X (addr %0X) (instruction %X)\n", pc, addr, instruction);
 #endif
         exit_loop(ERR_MISALIGNED_MEMORY_ACCESS);
       }
@@ -440,11 +399,9 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
     GET_FROM_REG(v2, GET_RS2(instruction));
 #if LOG_TRACE
     const uint8_t funct7 = GET_FUNCT7(instruction);
-    printf("int op funct3=%d funct7=%d rd=%d rs1=%d rs2=%d\n", funct3, funct7,
-           rd, GET_RS1(instruction), GET_RS2(instruction));
+    printf("int op funct3=%d funct7=%d rd=%d rs1=%d rs2=%d\n", funct3, funct7, rd, GET_RS1(instruction), GET_RS2(instruction));
 #endif
-    const uint8_t jump_point =
-        funct3 | ((instruction >> 22) & 8) | ((instruction >> 26) & 0x10);
+    const uint8_t jump_point = funct3 | ((instruction >> 22) & 8) | ((instruction >> 26) & 0x10);
 #if LOG_TRACE
     printf("jump_point=%d\n", jump_point);
 #endif
@@ -555,8 +512,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
     GET_FROM_REG(v2, GET_RS2(instruction));
 
     const uint32_t imm =
-        (instruction & 0x80000000) | ((instruction & (1 << 7)) << 23) |
-        ((instruction & 0x7E000000) >> 1) | ((instruction & 0xF00) << 12);
+        (instruction & 0x80000000) | ((instruction & (1 << 7)) << 23) | ((instruction & 0x7E000000) >> 1) | ((instruction & 0xF00) << 12);
     const int32_t imms = ((int32_t)imm) >> 19;
 
     uint8_t is_taken = 0;
@@ -581,18 +537,13 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
       break;
     }
 #if LOG_TRACE
-    printf("branch rs1=%d rs2=%d imms=%d is_taken=%d\n", GET_RS1(instruction),
-           GET_RS2(instruction), imms, is_taken);
-    printf("PC 0x%0X is_taken %d imms %d instruction 0x%04X\n", pc, is_taken,
-           imms, instruction);
+    printf("branch rs1=%d rs2=%d imms=%d is_taken=%d\n", GET_RS1(instruction), GET_RS2(instruction), imms, is_taken);
+    printf("PC 0x%0X is_taken %d imms %d instruction 0x%04X\n", pc, is_taken, imms, instruction);
 #endif
     if (is_taken) {
       if (imms & 3) {
 #if USE_PRINT
-        fprintf(
-            stderr,
-            "misaligned branch at pc %0X (instruction %X) address change %d\n",
-            pc, instruction, imms);
+        fprintf(stderr, "misaligned branch at pc %0X (instruction %X) address change %d\n", pc, instruction, imms);
 #endif
         exit_loop(ERR_MISALIGNED_MEMORY_ACCESS);
       }
@@ -620,9 +571,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
     }
     if (addr & 0x3) {
 #if USE_PRINT
-      fprintf(stderr,
-              "misaligned jalr at pc %0X (instruction %X) new address 0x%0X\n",
-              pc, instruction, addr);
+      fprintf(stderr, "misaligned jalr at pc %0X (instruction %X) new address 0x%0X\n", pc, instruction, addr);
 #endif
       exit_loop(ERR_MISALIGNED_MEMORY_ACCESS);
     }
@@ -633,8 +582,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
   op_jal:;
     rd = GET_RD(instruction);
     const uint32_t imm =
-        ((instruction << 11) & 0x7F800000) | ((instruction << 2) & (1 << 22)) |
-        ((instruction >> 9) & 0x3FF000) | (instruction & (1 << 31));
+        ((instruction << 11) & 0x7F800000) | ((instruction << 2) & (1 << 22)) | ((instruction >> 9) & 0x3FF000) | (instruction & (1 << 31));
     int32_t immi = ((int32_t)imm) >> 11;
 
     if (rd) {
@@ -642,9 +590,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
     }
     if (immi & 0x3) {
 #if USE_PRINT
-      fprintf(stderr,
-              "misaligned jal at pc %0X (instruction %X) address change %d\n",
-              pc, instruction, immi);
+      fprintf(stderr, "misaligned jal at pc %0X (instruction %X) address change %d\n", pc, instruction, immi);
 #endif
       exit_loop(ERR_MISALIGNED_MEMORY_ACCESS);
     }
@@ -665,6 +611,9 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
     uint8_t is_test;
     uint32_t exit_code;
     switch (a7) {
+    case SYS_print_mem_access: {
+      mem_write_intercept = GET_FROM_REG_DIRECT(10);
+    } break;
     case 93:
       // exit
       is_test = a0 & 1;
@@ -695,12 +644,24 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
       break;
     }
     {
-      uint32_t res =
-          syscall_handler(a7, GET_FROM_REG_DIRECT(10), GET_FROM_REG_DIRECT(11),
-                          GET_FROM_REG_DIRECT(12), GET_FROM_REG_DIRECT(13),
-                          GET_FROM_REG_DIRECT(14), GET_FROM_REG_DIRECT(15),
-                          GET_FROM_REG_DIRECT(16), wmem);
-      SET_TO_REG(10, res);
+      uint32_t user_handled = 0;
+      if (user_syscall_handler) {
+        // printf("------------> user syscall handler present syscall number %d\n", a7);
+        uint32_t res =
+            user_syscall_handler(&user_handled, a7, GET_FROM_REG_DIRECT(10), GET_FROM_REG_DIRECT(11), GET_FROM_REG_DIRECT(12),
+                                 GET_FROM_REG_DIRECT(13), GET_FROM_REG_DIRECT(14), GET_FROM_REG_DIRECT(15), GET_FROM_REG_DIRECT(16), wmem);
+        if (user_handled == 1) {
+          SET_TO_REG(10, res);
+        } else if (user_handled == 2) {
+          exit_loop(0);
+        }
+      }
+      if (user_handled == 0) {
+        uint32_t res =
+            syscall_handler(a7, GET_FROM_REG_DIRECT(10), GET_FROM_REG_DIRECT(11), GET_FROM_REG_DIRECT(12), GET_FROM_REG_DIRECT(13),
+                            GET_FROM_REG_DIRECT(14), GET_FROM_REG_DIRECT(15), GET_FROM_REG_DIRECT(16), wmem);
+        SET_TO_REG(10, res);
+      }
     }
     goto normal_end;
   }
@@ -738,8 +699,7 @@ static int riscv_vm_main_loop_4(uint8_t *initial_registers, uint8_t *wmem,
     const uint8_t rs1 = GET_RS1(instruction);
     printf("rd %02d rs1 %02d csr %03X\n", rd, rs1, csr);
     dbg_dump_registers_short(registers);
-    printf("CSR op rd %02d rs1 0x%02d csr 0x%03X funct3 %d\n", rd, rs1, csr,
-           funct3);
+    printf("CSR op rd %02d rs1 0x%02d csr 0x%03X funct3 %d\n", rd, rs1, csr, funct3);
     printf("%s register 0x%X \n", reg_func_name[funct3], csr);
 #endif
 
