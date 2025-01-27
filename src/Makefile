@@ -12,6 +12,7 @@ CC = gcc
 #CFLAGS = -Wall -Wextra -O3 -mno-sse
 CFLAGS = -Wall -Wextra -O3
 #CFLAGS = 
+CFLAGS_GR = $(shell pkg-config --cflags --libs glew sdl2)
 
 
 # Source files
@@ -19,19 +20,26 @@ SRC_SIMPLE=simple.c riscv-vm-portable.c
 SRC_RUNELF=runelf.c riscv-vm-portable.c riscv-vm-optimized-1.c riscv-vm-optimized-2.c \
   riscv-vm-common.c riscv-vm-optimized-3.c riscv-vm-optimized-4.c riscv-vm-syscall-handler.c \
   runelf-lib.c
+SRC_RUNELF_GR=runelf-graph.c riscv-vm-portable.c riscv-vm-optimized-1.c riscv-vm-optimized-2.c \
+  riscv-vm-common.c riscv-vm-optimized-3.c riscv-vm-optimized-4.c riscv-vm-syscall-handler.c \
+  runelf-lib.c
 
 # Output executables
 OUT_SIMPLE=simple
 OUT_RUNELF=runelf
+OUT_RUNELF_GR=runelf-gr
 
 # Default target
-all: $(OUT_SIMPLE) $(OUT_RUNELF)
+all: $(OUT_SIMPLE) $(OUT_RUNELF) $(OUT_RUNELF_GR)
 
 $(OUT_SIMPLE): $(SRC_SIMPLE)
 	$(CC) $(CFLAGS) -o $@ $^
 
 $(OUT_RUNELF): $(SRC_RUNELF)
 	$(CC) $(CFLAGS) -o $@ $^
+
+$(OUT_RUNELF_GR): $(SRC_RUNELF_GR)
+	$(CC) $(CFLAGS) $(CFLAGS_GR) -framework OpenGL -o $@ $^
 
 # Run targets
 run-simple: $(OUT_SIMPLE)
@@ -89,9 +97,14 @@ run-doom: $(OUT_RUNELF)
 	echo $(CURRENT_DIR)
 	cd /Users/dark/projects/doom/riscv-vm-doom/test && $(CURRENT_DIR)/$(OUT_RUNELF) doom -verbose -opt4
 
+run-doom-gr: $(OUT_RUNELF)
+	echo $(CURRENT_DIR)
+	cd /Users/dark/projects/doom/riscv-vm-doom/test && $(CURRENT_DIR)/$(OUT_RUNELF_GR) doom -verbose
+
 # Clean target
 clean:
-	rm -f $(OUT_SIMPLE) $(OUT_RUNELF)
+	rm *.o || true
+	rm -f $(OUT_SIMPLE) $(OUT_RUNELF) $(OUT_RUNELF_GR)
 
 rebuild: clean all
 
