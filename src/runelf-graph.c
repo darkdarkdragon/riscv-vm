@@ -54,10 +54,6 @@ static app_t *g_app;
 static uint32_t graph_syscall_handler(uint32_t *handled, uint32_t syscall_number, uint32_t arg1, uint32_t arg2, uint32_t arg3,
                                       uint32_t arg4, uint32_t arg5, uint32_t arg6, uint32_t arg7, void *wmem) {
 
-  if (app_yield(g_app) == APP_STATE_EXIT_REQUESTED) {
-    *handled = 2;
-    return 0;
-  }
   switch (syscall_number) {
   case SYS_set_palette: {
     // printf("SYS_set_paletter\n");
@@ -80,12 +76,16 @@ static uint32_t graph_syscall_handler(uint32_t *handled, uint32_t syscall_number
         canvas[x + y * SCREEN_WIDTH] = palette[src[x + y * SCREEN_WIDTH]] | 0xff000000;
       }
     }
+    if (app_yield(g_app) == APP_STATE_EXIT_REQUESTED) {
+      *handled = 2;
+      return 0;
+    }
+    app_present(g_app, canvas, SCREEN_WIDTH, SCREEN_HEIGHT, 0xffffff, 0x000000);
     return 0;
   } break;
   default:
     break;
   }
-  app_present(g_app, canvas, SCREEN_WIDTH, SCREEN_HEIGHT, 0xffffff, 0x000000);
 
   return 0;
 }
@@ -98,6 +98,7 @@ int app_proc(app_t *app, void *user_data) {
   }
   app_screenmode(app, APP_SCREENMODE_WINDOW);
   int exit_code = run_elf32v2(file_data, 0, 4, graph_syscall_handler);
+  // int exit_code = run_elf32v2(file_data, 0, 4, 0);
   return exit_code;
 }
 
@@ -154,6 +155,8 @@ int main(int argc, char **argv) {
   int exit_code = 0;
   if (e_ident[EI_CLASS] == ELFCLASS32) {
     // exit_code = run_elf32v2(file_data, verbose, 4);
+    // exit_code = run_elf32v2(file_data, 0, 4, graph_syscall_handler);
+    // exit_code = run_elf32v2(file_data, 0, 4, 0);
     exit_code = app_run(app_proc, NULL, NULL, NULL, NULL);
   } else if (e_ident[EI_CLASS] == ELFCLASS64) {
     // process_elf64(file_data);
