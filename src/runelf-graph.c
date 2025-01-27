@@ -1,5 +1,6 @@
 
 #include <inttypes.h>
+#include <stdio.h>
 #include <sys/fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -50,11 +51,59 @@ static app_t *g_app;
 
 #define SYS_present_screen 1024
 #define SYS_set_palette 1025
+#define SYS_get_event 1026
+
+/* Input event types. */
+typedef enum { ev_keydown, ev_keyup, ev_mouse, ev_joystick } guest_evtype_t;
+
+/* Event structure. */
+typedef struct {
+  guest_evtype_t type;
+  int data1; /* keys / mouse/joystick buttons */
+  int data2; /* mouse/joystick x move */
+  int data3; /* mouse/joystick y move */
+} guest_event_t;
 
 static uint32_t graph_syscall_handler(uint32_t *handled, uint32_t syscall_number, uint32_t arg1, uint32_t arg2, uint32_t arg3,
                                       uint32_t arg4, uint32_t arg5, uint32_t arg6, uint32_t arg7, void *wmem) {
 
   switch (syscall_number) {
+  case SYS_get_event: {
+    guest_event_t *guest_events = (guest_event_t *)(wmem + arg1);
+    uint32_t size_bytes = arg2;
+    uint32_t size_num = arg3;
+    int host_buf_size = sizeof(guest_event_t) * size_num;
+    // printf("asked for events, buf %d bytes (%d items) host buf size %d\n", size_bytes, size_num, host_buf_size);
+    if (host_buf_size != size_bytes) {
+      fprintf(stderr, "different aligment on host and guest (host struct size %d, guest struct size%d)\n", sizeof(guest_event_t),
+              size_bytes / size_num);
+      exit(2);
+    }
+    app_input_t host_events = app_input(g_app);
+    int outer = 0;
+    // printf("got %d events total guest buf size %d items\n", host_events.count, size_num);
+    for (int i = 0; i < host_events.count && i < size_num; i++) {
+      // printf("event %d of type %d\n", i, host_events.events[i].type);
+      switch (host_events.events[i].type) {
+      case APP_INPUT_KEY_DOWN:
+        printf("event %d of type APP_INPUT_KEY_DOWN key %d outer %d\n", i, host_events.events[i].data.key, outer);
+        guest_events[outer].type = ev_keydown;
+        guest_events[outer].data1 = host_events.events[i].data.key;
+        outer++;
+        break;
+      case APP_INPUT_KEY_UP:
+        printf("event %d of type APP_INPUT_KEY_UP key %d outer %d\n", i, host_events.events[i].data.key, outer);
+        guest_events[outer].type = ev_keyup;
+        guest_events[outer].data1 = host_events.events[i].data.key;
+        outer++;
+        break;
+      default:
+        break;
+      }
+    }
+    *handled = 1;
+    return outer;
+  } break;
   case SYS_set_palette: {
     // printf("SYS_set_paletter\n");
     *handled = 1;
